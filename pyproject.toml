@@ -1,0 +1,33 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "meeting-summarizer"
+version = "0.1.0"
+description = "CLI for cleaning and analyzing committee meeting transcripts."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+authors = [{ name = "Greg Watts" }]
+dependencies = [
+  "openai>=1.66.0",
+  "pydantic>=2.10.0",
+  "python-dotenv>=1.0.1",
+  "pyyaml>=6.0.2",
+  "rich>=13.9.4",
+  "typer>=0.15.1",
+]
+
+[project.scripts]
+meeting-summarizer = "meeting_summarizer.cli:app"
+
+[dependency-groups]
+dev = ["pytest>=8.3.5"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/meeting_summarizer"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-p no:cacheprovider"

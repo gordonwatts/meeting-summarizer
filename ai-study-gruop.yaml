@@ -1,0 +1,6 @@
+name: AI Study Group
+focus_areas:
+- id: event-generation-and-simulation
+  title: Event generation and simulation
+  description: External-to-ATLAS efforts; how they can be efficiently integrated into
+    ATLAS workflows.

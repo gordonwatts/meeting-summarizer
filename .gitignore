@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+.uv-cache/
+.test-workdir/
+pytest-cache/
+pytest-tmp/
+meeting-summarizer-*/
+pytest-cache-files-*/
+uv-*.lock
+./*.yaml
