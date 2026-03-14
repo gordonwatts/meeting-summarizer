@@ -116,6 +116,7 @@ def test_analysis_writes_all_outputs(workspace_tmp_path, monkeypatch) -> None:
         ],
     )
     assert result.exit_code == 0
+    assert result.stdout == ""
     assert (workspace_tmp_path / "meeting.cleaned.md").exists()
     assert (workspace_tmp_path / "meeting.summary.md").exists()
     assert (workspace_tmp_path / "meeting.focus-areas.md").exists()
@@ -154,6 +155,7 @@ def test_clean_command_passes_max_clean_chars(workspace_tmp_path, monkeypatch) -
         ],
     )
     assert result.exit_code == 0
+    assert result.stdout == ""
     assert captured["max_chunk_chars"] == 321
 
 
@@ -220,6 +222,7 @@ def test_summarize_reuses_existing_cleaned_markdown(workspace_tmp_path, monkeypa
     )
 
     assert result.exit_code == 0
+    assert result.stdout == ""
     assert "Existing cleaned text." in (workspace_tmp_path / "meeting.summary.md").read_text(encoding="utf-8")
 
 
@@ -296,6 +299,7 @@ def test_summarize_cleans_when_cleaned_markdown_missing(workspace_tmp_path, monk
     )
 
     assert result.exit_code == 0
+    assert result.stdout == ""
     assert (workspace_tmp_path / "meeting.cleaned.md").exists()
     assert "Fresh cleaned text." in (workspace_tmp_path / "meeting.summary.md").read_text(encoding="utf-8")
 
@@ -359,6 +363,7 @@ def test_cross_reference_reuses_existing_cleaned_markdown(workspace_tmp_path, mo
     )
 
     assert result.exit_code == 0
+    assert result.stdout == ""
     assert "Existing summary paragraph." in (workspace_tmp_path / "meeting.focus-areas.md").read_text(encoding="utf-8")
     assert "Existing cleaned text." in (workspace_tmp_path / "meeting.focus-areas.md").read_text(encoding="utf-8")
 
@@ -450,6 +455,7 @@ def test_analysis_reuses_existing_cleaned_markdown(workspace_tmp_path, monkeypat
     )
 
     assert result.exit_code == 0
+    assert result.stdout == ""
     assert "Existing summary paragraph." in (workspace_tmp_path / "meeting.focus-areas.md").read_text(encoding="utf-8")
     assert "Existing cleaned text." in (workspace_tmp_path / "meeting.focus-areas.md").read_text(encoding="utf-8")
 
@@ -482,9 +488,7 @@ def test_analysis_returns_existing_outputs_before_creating_client(workspace_tmp_
     )
 
     assert result.exit_code == 0
-    assert str(workspace_tmp_path / "meeting.cleaned.md") in result.stdout
-    assert str(workspace_tmp_path / "meeting.summary.md") in result.stdout
-    assert str(focus_path) in result.stdout
+    assert result.stdout == ""
 
 
 def test_analysis_reuses_existing_focus_output_and_generates_missing_dependencies(workspace_tmp_path, monkeypatch) -> None:
@@ -552,6 +556,7 @@ def test_analysis_reuses_existing_focus_output_and_generates_missing_dependencie
     )
 
     assert result.exit_code == 0
+    assert result.stdout == ""
     assert (workspace_tmp_path / "meeting.cleaned.md").exists()
     assert (workspace_tmp_path / "meeting.summary.md").exists()
     assert focus_path.exists()
