@@ -24,16 +24,25 @@ class FakeSDKClient:
 @pytest.fixture()
 def fake_openai(monkeypatch: pytest.MonkeyPatch) -> FakeResponses:
     responses = FakeResponses()
-    monkeypatch.setattr("meeting_summarizer.openai_client.OpenAI", lambda api_key: FakeSDKClient(responses))
+    monkeypatch.setattr(
+        "meeting_summarizer.openai_client.OpenAI",
+        lambda api_key: FakeSDKClient(responses),
+    )
     return responses
 
 
-def test_generate_json_uses_disk_cache(workspace_tmp_path, fake_openai: FakeResponses) -> None:
+def test_generate_json_uses_disk_cache(
+    workspace_tmp_path, fake_openai: FakeResponses
+) -> None:
     cache_dir = workspace_tmp_path / "cache"
     client = OpenAIClient(api_key="secret", cache_dir=cache_dir)
 
-    first = client.generate_json(model="gpt-5-mini", instructions="Test instructions", input_text="hello")
-    second = client.generate_json(model="gpt-5-mini", instructions="Test instructions", input_text="hello")
+    first = client.generate_json(
+        model="gpt-5-mini", instructions="Test instructions", input_text="hello"
+    )
+    second = client.generate_json(
+        model="gpt-5-mini", instructions="Test instructions", input_text="hello"
+    )
 
     assert first == {"value": "cached"}
     assert second == {"value": "cached"}
@@ -41,7 +50,9 @@ def test_generate_json_uses_disk_cache(workspace_tmp_path, fake_openai: FakeResp
     assert len(list(cache_dir.glob("*.json"))) == 1
 
 
-def test_generate_json_separates_distinct_cache_keys(workspace_tmp_path, fake_openai: FakeResponses) -> None:
+def test_generate_json_separates_distinct_cache_keys(
+    workspace_tmp_path, fake_openai: FakeResponses
+) -> None:
     cache_dir = workspace_tmp_path / "cache"
     client = OpenAIClient(api_key="secret", cache_dir=cache_dir)
 
@@ -53,14 +64,20 @@ def test_generate_json_separates_distinct_cache_keys(workspace_tmp_path, fake_op
     assert len(list(cache_dir.glob("*.json"))) == 3
 
 
-def test_generate_json_ignores_invalid_cache_entries(workspace_tmp_path, fake_openai: FakeResponses) -> None:
+def test_generate_json_ignores_invalid_cache_entries(
+    workspace_tmp_path, fake_openai: FakeResponses
+) -> None:
     cache_dir = workspace_tmp_path / "cache"
     client = OpenAIClient(api_key="secret", cache_dir=cache_dir)
-    cache_path = client._cache_path(model="gpt-5-mini", instructions="Test instructions", input_text="hello")
+    cache_path = client._cache_path(
+        model="gpt-5-mini", instructions="Test instructions", input_text="hello"
+    )
     cache_path.parent.mkdir(parents=True, exist_ok=True)
     cache_path.write_text("not-json", encoding="utf-8")
 
-    payload = client.generate_json(model="gpt-5-mini", instructions="Test instructions", input_text="hello")
+    payload = client.generate_json(
+        model="gpt-5-mini", instructions="Test instructions", input_text="hello"
+    )
 
     assert payload == {"value": "cached"}
     assert len(fake_openai.calls) == 1

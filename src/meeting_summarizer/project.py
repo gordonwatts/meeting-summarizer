@@ -71,9 +71,13 @@ def init_project(path: str | Path, name: str) -> ProjectConfig:
     return project
 
 
-def add_focus_area(path: str | Path, title: str, description: str, notes: str | None = None) -> FocusArea:
+def add_focus_area(
+    path: str | Path, title: str, description: str, notes: str | None = None
+) -> FocusArea:
     project = load_project(path)
-    area = FocusArea(id=slugify(title), title=title, description=description, notes=notes)
+    area = FocusArea(
+        id=slugify(title), title=title, description=description, notes=notes
+    )
     project.focus_areas.append(area)
     save_project(project, project.path)
     return area

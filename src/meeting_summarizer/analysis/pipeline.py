@@ -3,7 +3,13 @@ from __future__ import annotations
 import logging
 
 from meeting_summarizer.config import DEFAULT_MAX_CLEAN_CHARS
-from meeting_summarizer.models import CleanTranscript, FocusAreaReview, MeetingSummary, ProjectConfig, TranscriptSegment
+from meeting_summarizer.models import (
+    CleanTranscript,
+    FocusAreaReview,
+    MeetingSummary,
+    ProjectConfig,
+    TranscriptSegment,
+)
 from meeting_summarizer.openai_client import (
     OpenAIClient,
     clean_transcript_with_llm,
@@ -56,14 +62,20 @@ def clean_transcript(
 ) -> CleanTranscript:
     LOGGER.info("Cleaning transcript")
     chunks = chunk_transcript_segments(segments, max_chars=max_chunk_chars)
-    LOGGER.debug(f"Cleaning transcript in {len(chunks)} chunk(s) with max_chunk_chars={max_chunk_chars}")
+    LOGGER.debug(
+        f"Cleaning transcript in {len(chunks)} chunk(s) with max_chunk_chars={max_chunk_chars}"
+    )
     cleaned_segments: list[TranscriptSegment] = []
     for chunk in chunks:
-        cleaned_segments.extend(clean_transcript_with_llm(client, model, chunk).segments)
+        cleaned_segments.extend(
+            clean_transcript_with_llm(client, model, chunk).segments
+        )
     return CleanTranscript(segments=cleaned_segments)
 
 
-def summarize_meeting(cleaned: CleanTranscript, client: OpenAIClient, model: str) -> MeetingSummary:
+def summarize_meeting(
+    cleaned: CleanTranscript, client: OpenAIClient, model: str
+) -> MeetingSummary:
     LOGGER.info("Summarizing meeting")
     return summarize_meeting_with_llm(client, model, cleaned)
 

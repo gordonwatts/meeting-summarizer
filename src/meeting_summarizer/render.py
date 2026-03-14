@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 from rich.console import Console
@@ -19,7 +18,9 @@ from meeting_summarizer.models import (
 )
 
 
-def derive_output_path(transcript_path: str | Path, suffix: str, output_dir: str | Path | None = None) -> Path:
+def derive_output_path(
+    transcript_path: str | Path, suffix: str, output_dir: str | Path | None = None
+) -> Path:
     source_path = Path(transcript_path)
     directory = Path(output_dir) if output_dir else source_path.parent
     return directory / f"{source_path.stem}{suffix}"
@@ -41,14 +42,22 @@ def _render_markdown_table(headers: list[str], rows: list[list[str]]) -> list[st
         "| " + " | ".join("---" for _ in headers) + " |",
     ]
     if not rows:
-        lines.append("| " + " | ".join("None noted." if index == 0 else "" for index, _ in enumerate(headers)) + " |")
+        lines.append(
+            "| "
+            + " | ".join(
+                "None noted." if index == 0 else "" for index, _ in enumerate(headers)
+            )
+            + " |"
+        )
         return lines
     for row in rows:
         lines.append("| " + " | ".join(_escape_table_cell(cell) for cell in row) + " |")
     return lines
 
 
-def _parse_markdown_table(lines: list[str], start_index: int) -> tuple[list[dict[str, str]], int]:
+def _parse_markdown_table(
+    lines: list[str], start_index: int
+) -> tuple[list[dict[str, str]], int]:
     header_line = lines[start_index].strip()
     divider_line = lines[start_index + 1].strip()
     if not (header_line.startswith("|") and divider_line.startswith("|")):
@@ -83,7 +92,9 @@ def render_cleaned_markdown(cleaned: CleanTranscript) -> str:
 def parse_cleaned_markdown(content: str) -> CleanTranscript:
     lines = content.splitlines()
     if not lines or lines[0].strip() != "# Cleaned Transcript":
-        raise ValueError("Cleaned transcript markdown must start with '# Cleaned Transcript'.")
+        raise ValueError(
+            "Cleaned transcript markdown must start with '# Cleaned Transcript'."
+        )
 
     segments: list[TranscriptSegment] = []
     current_speaker: str | None = None
@@ -130,10 +141,16 @@ def render_summary_markdown(summary: MeetingSummary) -> str:
     theme_rows = [[theme.title, "; ".join(theme.details)] for theme in summary.themes]
     lines.extend(_render_markdown_table(["Theme", "Details"], theme_rows))
     lines.extend(["", "## Action Items", ""])
-    action_rows = [[item.mentioner, item.description, item.quote or ""] for item in summary.action_items]
+    action_rows = [
+        [item.mentioner, item.description, item.quote or ""]
+        for item in summary.action_items
+    ]
     lines.extend(_render_markdown_table(["Owner", "Action", "Quote"], action_rows))
     lines.extend(["", "## External Resources", ""])
-    resource_rows = [[resource.name, resource.resource_type or "", resource.context or ""] for resource in summary.resources]
+    resource_rows = [
+        [resource.name, resource.resource_type or "", resource.context or ""]
+        for resource in summary.resources
+    ]
     lines.extend(_render_markdown_table(["Resource", "Type", "Context"], resource_rows))
     lines.extend(["", "## Talk Highlights", ""])
     for talk in summary.talk_points:
@@ -151,7 +168,9 @@ def render_summary_markdown(summary: MeetingSummary) -> str:
 def parse_summary_markdown(content: str) -> MeetingSummary:
     lines = content.splitlines()
     if not lines or lines[0].strip() != "# Meeting Summary":
-        raise ValueError("Meeting summary markdown must start with '# Meeting Summary'.")
+        raise ValueError(
+            "Meeting summary markdown must start with '# Meeting Summary'."
+        )
 
     section = "paragraph"
     paragraph_lines: list[str] = []
@@ -201,7 +220,9 @@ def parse_summary_markdown(content: str) -> MeetingSummary:
             continue
         if line.startswith("### "):
             flush_talk()
-            current_talk = TalkPoint(speaker=line[4:].strip(), salient_points=[], questions=[], quotes=[])
+            current_talk = TalkPoint(
+                speaker=line[4:].strip(), salient_points=[], questions=[], quotes=[]
+            )
             talk_subsection = None
             index += 1
             continue
@@ -230,7 +251,13 @@ def parse_summary_markdown(content: str) -> MeetingSummary:
             themes = [
                 SummaryTheme(
                     title=row.get("Theme", ""),
-                    details=normalize_bullets([item.strip() for item in row.get("Details", "").split(";") if item.strip()]),
+                    details=normalize_bullets(
+                        [
+                            item.strip()
+                            for item in row.get("Details", "").split(";")
+                            if item.strip()
+                        ]
+                    ),
                 )
                 for row in rows
                 if row.get("Theme", "") != "None noted."
@@ -269,7 +296,11 @@ def parse_summary_markdown(content: str) -> MeetingSummary:
                 current_talk.questions.append(line[2:])
                 index += 1
                 continue
-            if talk_subsection == "quotes" and line.startswith('- "') and line.endswith('"'):
+            if (
+                talk_subsection == "quotes"
+                and line.startswith('- "')
+                and line.endswith('"')
+            ):
                 current_talk.quotes.append(line[3:-1])
                 index += 1
                 continue
@@ -288,10 +319,20 @@ def parse_summary_markdown(content: str) -> MeetingSummary:
 def render_focus_area_markdown(reviews: list[FocusAreaReview]) -> str:
     lines = ["# Focus Area Cross Reference", ""]
     for review in reviews:
-        lines.extend([f"## {review.focus_area.title}", "", review.coverage_note, "", "Relevant points:"])
+        lines.extend(
+            [
+                f"## {review.focus_area.title}",
+                "",
+                review.coverage_note,
+                "",
+                "Relevant points:",
+            ]
+        )
         lines.extend(f"- {item}" for item in review.relevant_points or ["None noted."])
         lines.extend(["", "Outstanding questions:"])
-        lines.extend(f"- {item}" for item in review.outstanding_questions or ["None noted."])
+        lines.extend(
+            f"- {item}" for item in review.outstanding_questions or ["None noted."]
+        )
         lines.extend(["", "Action items:"])
         lines.extend(f"- {item}" for item in review.action_items or ["None noted."])
         lines.extend(["", "Quotes:"])

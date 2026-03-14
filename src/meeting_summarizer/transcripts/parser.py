@@ -15,7 +15,9 @@ VTT_SPEAKER_RE = re.compile(r"^(?P<speaker>[^:]+):\s*(?P<text>.+)$")
 TXT_LINE_RE = re.compile(
     r"^(?P<time>\d{1,2}:\d{2}:\d{2})(?:\s+)?(?P<speaker>[^:]+):\s*(?P<text>.+)$"
 )
-ZOOM_BLOCK_HEADER_RE = re.compile(r"^\[(?P<speaker>.+?)\]\s+(?P<time>\d{1,2}:\d{2}:\d{2})$")
+ZOOM_BLOCK_HEADER_RE = re.compile(
+    r"^\[(?P<speaker>.+?)\]\s+(?P<time>\d{1,2}:\d{2}:\d{2})$"
+)
 
 
 def parse_transcript(path: str | Path) -> list[TranscriptSegment]:
@@ -87,7 +89,9 @@ def _parse_zoom_text(raw_text: str) -> list[TranscriptSegment]:
 
 def _parse_zoom_text_blocks(raw_text: str) -> list[TranscriptSegment]:
     segments: list[TranscriptSegment] = []
-    blocks = [block.strip() for block in re.split(r"\r?\n\s*\r?\n", raw_text) if block.strip()]
+    blocks = [
+        block.strip() for block in re.split(r"\r?\n\s*\r?\n", raw_text) if block.strip()
+    ]
     for block in blocks:
         lines = [line.strip() for line in block.splitlines() if line.strip()]
         if len(lines) < 2:
@@ -107,7 +111,9 @@ def _parse_zoom_text_blocks(raw_text: str) -> list[TranscriptSegment]:
     return segments
 
 
-def _merge_adjacent_segments(segments: list[TranscriptSegment]) -> list[TranscriptSegment]:
+def _merge_adjacent_segments(
+    segments: list[TranscriptSegment],
+) -> list[TranscriptSegment]:
     if not segments:
         return []
     merged = [segments[0]]

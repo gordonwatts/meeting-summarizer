@@ -7,7 +7,11 @@ from typing import Annotated
 import typer
 from rich.console import Console
 
-from meeting_summarizer.analysis.pipeline import clean_transcript, cross_reference_focus_areas, summarize_meeting
+from meeting_summarizer.analysis.pipeline import (
+    clean_transcript,
+    cross_reference_focus_areas,
+    summarize_meeting,
+)
 from meeting_summarizer.config import (
     DEFAULT_MAX_CLEAN_CHARS,
     DEFAULT_MODEL_ECONOMY,
@@ -46,7 +50,11 @@ transcript_app = typer.Typer(
     no_args_is_help=True,
     help="Run transcript cleaning, summarization, and focus-area analysis.",
 )
-app.add_typer(project_app, name="project", help="Create, update, and inspect the project YAML file.")
+app.add_typer(
+    project_app,
+    name="project",
+    help="Create, update, and inspect the project YAML file.",
+)
 app.add_typer(auth_app, name="auth", help="Manage OpenAI API credentials for this app.")
 app.add_typer(
     transcript_app,
@@ -68,13 +76,17 @@ def _make_client(api_key: str | None) -> OpenAIClient:
 
 def _write_markdown(output_path: Path, content: str, overwrite: bool) -> None:
     if output_path.exists() and not overwrite:
-        raise typer.BadParameter(f"{output_path} already exists. Use --overwrite to replace it.")
+        raise typer.BadParameter(
+            f"{output_path} already exists. Use --overwrite to replace it."
+        )
     output_path.write_text(content, encoding="utf-8")
 
 
 def _ensure_final_output_writable(output_path: Path, overwrite: bool) -> None:
     if output_path.exists() and not overwrite:
-        raise typer.BadParameter(f"{output_path} already exists. Use --overwrite to replace it.")
+        raise typer.BadParameter(
+            f"{output_path} already exists. Use --overwrite to replace it."
+        )
 
 
 def _all_outputs_exist(output_paths: list[Path]) -> bool:
@@ -86,7 +98,9 @@ def _log_output_paths(message: str, output_paths: list[Path]) -> None:
         logger.info(f"{message} {output_path}")
 
 
-def _resolve_models(project_models: dict[str, str] | None, economy: str | None, judgment: str | None) -> tuple[str, str]:
+def _resolve_models(
+    project_models: dict[str, str] | None, economy: str | None, judgment: str | None
+) -> tuple[str, str]:
     models = project_models or {}
     return (
         economy or models.get("economy", DEFAULT_MODEL_ECONOMY),
@@ -108,7 +122,9 @@ def _load_or_clean_transcript(
         cleaned = parse_cleaned_markdown(cleaned_path.read_text(encoding="utf-8"))
         return cleaned, cleaned_path, True
 
-    cleaned = clean_transcript(parse_transcript(transcript_path), client, economy_model, max_clean_chars)
+    cleaned = clean_transcript(
+        parse_transcript(transcript_path), client, economy_model, max_clean_chars
+    )
     _write_markdown(cleaned_path, render_cleaned_markdown(cleaned), overwrite)
     return cleaned, cleaned_path, False
 
@@ -191,13 +207,17 @@ def transcript_clean(
         help="Model used for the transcript cleaning phase.",
         show_default=DEFAULT_MODEL_ECONOMY,
     ),
-    max_clean_chars: int = typer.Option(DEFAULT_MAX_CLEAN_CHARS, "--max-clean-chars", min=1),
+    max_clean_chars: int = typer.Option(
+        DEFAULT_MAX_CLEAN_CHARS, "--max-clean-chars", min=1
+    ),
 ) -> None:
     output_path = derive_output_path(transcript_path, ".cleaned.md", output_dir)
     _ensure_final_output_writable(output_path, overwrite)
     client = _make_client(api_key)
     economy_model, _ = _resolve_models(None, model_economy, None)
-    cleaned = clean_transcript(parse_transcript(transcript_path), client, economy_model, max_clean_chars)
+    cleaned = clean_transcript(
+        parse_transcript(transcript_path), client, economy_model, max_clean_chars
+    )
     _write_markdown(output_path, render_cleaned_markdown(cleaned), overwrite)
     logger.info(f"Wrote cleaned transcript to {output_path}")
 
@@ -224,7 +244,9 @@ def transcript_summarize(
         help="Model used for the meeting summarization phase.",
         show_default=DEFAULT_MODEL_JUDGMENT,
     ),
-    max_clean_chars: int = typer.Option(DEFAULT_MAX_CLEAN_CHARS, "--max-clean-chars", min=1),
+    max_clean_chars: int = typer.Option(
+        DEFAULT_MAX_CLEAN_CHARS, "--max-clean-chars", min=1
+    ),
 ) -> None:
     summary_path = derive_output_path(transcript_path, ".summary.md", output_dir)
     _ensure_final_output_writable(summary_path, overwrite)
@@ -262,20 +284,26 @@ def transcript_cross_reference(
         help="Model used for the meeting summarization phase.",
         show_default=DEFAULT_MODEL_JUDGMENT,
     ),
-    max_clean_chars: int = typer.Option(DEFAULT_MAX_CLEAN_CHARS, "--max-clean-chars", min=1),
+    max_clean_chars: int = typer.Option(
+        DEFAULT_MAX_CLEAN_CHARS, "--max-clean-chars", min=1
+    ),
 ) -> None:
     project_config = load_project(project)
     focus_path = derive_output_path(transcript_path, ".focus-areas.md", output_dir)
     _ensure_final_output_writable(focus_path, overwrite)
     client = _make_client(api_key)
-    economy_model, judgment_model = _resolve_models(project_config.models, model_economy, model_judgment)
+    economy_model, judgment_model = _resolve_models(
+        project_config.models, model_economy, model_judgment
+    )
     cleaned, _, _ = _load_or_clean_transcript(
         transcript_path, output_dir, client, economy_model, max_clean_chars, overwrite
     )
     summary, _, _ = _load_or_summarize_meeting(
         transcript_path, output_dir, cleaned, client, judgment_model, overwrite
     )
-    reviews = cross_reference_focus_areas(summary, cleaned, project_config, client, economy_model)
+    reviews = cross_reference_focus_areas(
+        summary, cleaned, project_config, client, economy_model
+    )
     _write_markdown(focus_path, render_focus_area_markdown(reviews), overwrite)
     logger.info(f"Wrote focus-area cross reference to {focus_path}")
 
@@ -303,7 +331,9 @@ def transcript_analysis(
         help="Model used for the meeting summarization phase.",
         show_default=DEFAULT_MODEL_JUDGMENT,
     ),
-    max_clean_chars: int = typer.Option(DEFAULT_MAX_CLEAN_CHARS, "--max-clean-chars", min=1),
+    max_clean_chars: int = typer.Option(
+        DEFAULT_MAX_CLEAN_CHARS, "--max-clean-chars", min=1
+    ),
 ) -> None:
     project_config = load_project(project)
     cleaned_path = derive_output_path(transcript_path, ".cleaned.md", output_dir)
@@ -315,7 +345,9 @@ def transcript_analysis(
         _log_output_paths("Existing analysis output:", output_paths)
         return
     client = _make_client(api_key)
-    economy_model, judgment_model = _resolve_models(project_config.models, model_economy, model_judgment)
+    economy_model, judgment_model = _resolve_models(
+        project_config.models, model_economy, model_judgment
+    )
     cleaned, cleaned_path, _ = _load_or_clean_transcript(
         transcript_path, output_dir, client, economy_model, max_clean_chars, overwrite
     )
@@ -323,6 +355,8 @@ def transcript_analysis(
         transcript_path, output_dir, cleaned, client, judgment_model, overwrite
     )
     if overwrite or not focus_path.exists():
-        reviews = cross_reference_focus_areas(summary, cleaned, project_config, client, economy_model)
+        reviews = cross_reference_focus_areas(
+            summary, cleaned, project_config, client, economy_model
+        )
         _write_markdown(focus_path, render_focus_area_markdown(reviews), overwrite)
     _log_output_paths("Analysis output ready:", output_paths)

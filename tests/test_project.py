@@ -4,7 +4,12 @@ from pathlib import Path
 
 from rich.console import Console
 
-from meeting_summarizer.project import add_focus_area, init_project, load_project, resolve_project_path
+from meeting_summarizer.project import (
+    add_focus_area,
+    init_project,
+    load_project,
+    resolve_project_path,
+)
 from meeting_summarizer.render import show_project
 
 

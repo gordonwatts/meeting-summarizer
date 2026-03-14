@@ -37,13 +37,30 @@ def _coerce_text(value: Any) -> str:
         parts = [_coerce_text(item) for item in value]
         return "; ".join(part for part in parts if part)
     if isinstance(value, dict):
-        actor = _coerce_text(value.get("owner") or value.get("mentioner") or value.get("speaker") or value.get("title"))
+        actor = _coerce_text(
+            value.get("owner")
+            or value.get("mentioner")
+            or value.get("speaker")
+            or value.get("title")
+        )
         quote = _coerce_text(value.get("quote"))
         simple_summary = _coerce_text(value.get("summary"))
         if simple_summary and set(value) == {"summary"}:
             return simple_summary
-        if actor and quote and not any(
-            value.get(field) for field in ("task", "description", "text", "summary", "note", "coverage_note")
+        if (
+            actor
+            and quote
+            and not any(
+                value.get(field)
+                for field in (
+                    "task",
+                    "description",
+                    "text",
+                    "summary",
+                    "note",
+                    "coverage_note",
+                )
+            )
         ):
             return f'{actor}: "{quote}"'
         main_text = _coerce_text(
@@ -84,8 +101,15 @@ def _coerce_string_field(value: Any) -> str | None:
 
 def _coerce_theme(value: Any) -> SummaryTheme:
     if isinstance(value, dict):
-        title = _coerce_text(value.get("theme") or value.get("topic") or value.get("title") or value.get("name"))
-        details = _coerce_text_list(value.get("details") or value.get("notes") or value.get("points") or [])
+        title = _coerce_text(
+            value.get("theme")
+            or value.get("topic")
+            or value.get("title")
+            or value.get("name")
+        )
+        details = _coerce_text_list(
+            value.get("details") or value.get("notes") or value.get("points") or []
+        )
         if not title:
             title = _coerce_text(value)
             details = []
@@ -96,9 +120,16 @@ def _coerce_theme(value: Any) -> SummaryTheme:
 def _coerce_resource(value: Any) -> ExternalResource:
     if isinstance(value, dict):
         return ExternalResource(
-            name=_coerce_text(value.get("name") or value.get("title") or value.get("resource")) or "Unnamed resource",
-            resource_type=_coerce_string_field(value.get("type") or value.get("resource_type")),
-            context=_coerce_string_field(value.get("context") or value.get("description") or value.get("notes")),
+            name=_coerce_text(
+                value.get("name") or value.get("title") or value.get("resource")
+            )
+            or "Unnamed resource",
+            resource_type=_coerce_string_field(
+                value.get("type") or value.get("resource_type")
+            ),
+            context=_coerce_string_field(
+                value.get("context") or value.get("description") or value.get("notes")
+            ),
         )
     return ExternalResource(name=_coerce_text(value) or "Unnamed resource")
 
@@ -134,13 +165,21 @@ class OpenAIClient:
         except (OSError, json.JSONDecodeError):
             LOGGER.warning(f"Ignoring unreadable cache entry at {cache_path}")
             return None
-        if not isinstance(cached, dict) or "payload" not in cached or not isinstance(cached["payload"], dict):
+        if (
+            not isinstance(cached, dict)
+            or "payload" not in cached
+            or not isinstance(cached["payload"], dict)
+        ):
             LOGGER.warning(f"Ignoring invalid cache entry at {cache_path}")
             return None
-        LOGGER.debug(f"OpenAI cache hit model={cached.get('model', 'unknown')} path={cache_path}")
+        LOGGER.debug(
+            f"OpenAI cache hit model={cached.get('model', 'unknown')} path={cache_path}"
+        )
         return cached["payload"]
 
-    def _write_cached_response(self, cache_path: Path, *, model: str, payload: dict[str, Any]) -> None:
+    def _write_cached_response(
+        self, cache_path: Path, *, model: str, payload: dict[str, Any]
+    ) -> None:
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         record = {"model": model, "payload": payload}
         with tempfile.NamedTemporaryFile(
@@ -155,10 +194,14 @@ class OpenAIClient:
             temp_path = Path(handle.name)
         os.replace(temp_path, cache_path)
 
-    def generate_json(self, *, model: str, instructions: str, input_text: str) -> dict[str, Any]:
+    def generate_json(
+        self, *, model: str, instructions: str, input_text: str
+    ) -> dict[str, Any]:
         if not input_text.strip():
             raise ValueError("OpenAI input_text cannot be empty.")
-        cache_path = self._cache_path(model=model, instructions=instructions, input_text=input_text)
+        cache_path = self._cache_path(
+            model=model, instructions=instructions, input_text=input_text
+        )
         cached_payload = self._read_cached_response(cache_path)
         if cached_payload is not None:
             return cached_payload
@@ -197,7 +240,9 @@ def transcript_to_text(segments: list[TranscriptSegment]) -> str:
     return "\n".join(lines)
 
 
-def clean_transcript_with_llm(client: OpenAIClient, model: str, segments: list[TranscriptSegment]) -> CleanTranscript:
+def clean_transcript_with_llm(
+    client: OpenAIClient, model: str, segments: list[TranscriptSegment]
+) -> CleanTranscript:
     payload = client.generate_json(
         model=model,
         instructions=(
@@ -225,7 +270,9 @@ def clean_transcript_with_llm(client: OpenAIClient, model: str, segments: list[T
     )
 
 
-def summarize_meeting_with_llm(client: OpenAIClient, model: str, cleaned: CleanTranscript) -> MeetingSummary:
+def summarize_meeting_with_llm(
+    client: OpenAIClient, model: str, cleaned: CleanTranscript
+) -> MeetingSummary:
     payload = client.generate_json(
         model=model,
         instructions=(
@@ -243,11 +290,18 @@ def summarize_meeting_with_llm(client: OpenAIClient, model: str, cleaned: CleanT
         themes=[_coerce_theme(item) for item in payload.get("themes", [])],
         action_items=[
             ActionItem(
-                mentioner=_coerce_text(item.get("mentioner") if isinstance(item, dict) else None)
+                mentioner=_coerce_text(
+                    item.get("mentioner") if isinstance(item, dict) else None
+                )
                 or _coerce_text(item.get("owner") if isinstance(item, dict) else None)
                 or "Unknown",
-                description=_coerce_text(item.get("description") if isinstance(item, dict) else item) or "No action recorded.",
-                quote=_coerce_string_field(item.get("quote") if isinstance(item, dict) else None),
+                description=_coerce_text(
+                    item.get("description") if isinstance(item, dict) else item
+                )
+                or "No action recorded.",
+                quote=_coerce_string_field(
+                    item.get("quote") if isinstance(item, dict) else None
+                ),
             )
             for item in payload.get("action_items", [])
         ],
@@ -290,8 +344,11 @@ def cross_reference_with_llm(
     return FocusAreaReview(
         focus_area=focus_area,
         relevant_points=_coerce_text_list(payload.get("relevant_points", [])),
-        outstanding_questions=_coerce_text_list(payload.get("outstanding_questions", [])),
+        outstanding_questions=_coerce_text_list(
+            payload.get("outstanding_questions", [])
+        ),
         action_items=_coerce_text_list(payload.get("action_items", [])),
         quotes=_coerce_text_list(payload.get("quotes", [])),
-        coverage_note=_coerce_text(payload.get("coverage_note")) or "No coverage note provided.",
+        coverage_note=_coerce_text(payload.get("coverage_note"))
+        or "No coverage note provided.",
     )
