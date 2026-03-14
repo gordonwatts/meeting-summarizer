@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Annotated
 
@@ -19,6 +20,7 @@ from meeting_summarizer.openai_client import OpenAIClient
 from meeting_summarizer.project import add_focus_area, init_project, load_project
 from meeting_summarizer.render import (
     derive_output_path,
+    parse_cleaned_markdown,
     render_cleaned_markdown,
     render_focus_area_markdown,
     render_summary_markdown,
@@ -49,6 +51,8 @@ app.add_typer(
     name="transcript",
     help="Run transcript cleaning, summarization, and focus-area analysis.",
 )
+
+logger = logging.getLogger(__name__)
 
 
 @app.callback()
@@ -154,11 +158,15 @@ def transcript_summarize(
 ) -> None:
     client = _make_client(api_key)
     economy_model, judgment_model = _resolve_models(None, model_economy, model_judgment)
-    cleaned = clean_transcript(parse_transcript(transcript_path), client, economy_model, max_clean_chars)
-    summary = summarize_meeting(cleaned, client, judgment_model)
     cleaned_path = derive_output_path(transcript_path, ".cleaned.md", output_dir)
+    if cleaned_path.exists():
+        logger.info("Reusing existing cleaned transcript at %s", cleaned_path)
+        cleaned = parse_cleaned_markdown(cleaned_path.read_text(encoding="utf-8"))
+    else:
+        cleaned = clean_transcript(parse_transcript(transcript_path), client, economy_model, max_clean_chars)
+        _write_markdown(cleaned_path, render_cleaned_markdown(cleaned), overwrite)
+    summary = summarize_meeting(cleaned, client, judgment_model)
     summary_path = derive_output_path(transcript_path, ".summary.md", output_dir)
-    _write_markdown(cleaned_path, render_cleaned_markdown(cleaned), overwrite)
     _write_markdown(summary_path, render_summary_markdown(summary), overwrite)
     typer.echo(str(summary_path))
 
