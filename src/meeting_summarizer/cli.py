@@ -8,6 +8,7 @@ from rich.console import Console
 
 from meeting_summarizer.analysis.pipeline import clean_transcript, cross_reference_focus_areas, summarize_meeting
 from meeting_summarizer.config import (
+    DEFAULT_MAX_CLEAN_CHARS,
     DEFAULT_MODEL_ECONOMY,
     DEFAULT_MODEL_JUDGMENT,
     resolve_api_key,
@@ -127,10 +128,11 @@ def transcript_clean(
     output_dir: str | None = typer.Option(None, "--output-dir"),
     overwrite: bool = typer.Option(False, "--overwrite"),
     model_economy: str | None = typer.Option(None, "--model-economy"),
+    max_clean_chars: int = typer.Option(DEFAULT_MAX_CLEAN_CHARS, "--max-clean-chars", min=1),
 ) -> None:
     client = _make_client(api_key)
     economy_model, _ = _resolve_models(None, model_economy, None)
-    cleaned = clean_transcript(parse_transcript(transcript_path), client, economy_model)
+    cleaned = clean_transcript(parse_transcript(transcript_path), client, economy_model, max_clean_chars)
     output_path = derive_output_path(transcript_path, ".cleaned.md", output_dir)
     _write_markdown(output_path, render_cleaned_markdown(cleaned), overwrite)
     typer.echo(str(output_path))
@@ -148,10 +150,11 @@ def transcript_summarize(
     overwrite: bool = typer.Option(False, "--overwrite"),
     model_economy: str | None = typer.Option(None, "--model-economy"),
     model_judgment: str | None = typer.Option(None, "--model-judgment"),
+    max_clean_chars: int = typer.Option(DEFAULT_MAX_CLEAN_CHARS, "--max-clean-chars", min=1),
 ) -> None:
     client = _make_client(api_key)
     economy_model, judgment_model = _resolve_models(None, model_economy, model_judgment)
-    cleaned = clean_transcript(parse_transcript(transcript_path), client, economy_model)
+    cleaned = clean_transcript(parse_transcript(transcript_path), client, economy_model, max_clean_chars)
     summary = summarize_meeting(cleaned, client, judgment_model)
     cleaned_path = derive_output_path(transcript_path, ".cleaned.md", output_dir)
     summary_path = derive_output_path(transcript_path, ".summary.md", output_dir)
@@ -173,11 +176,12 @@ def transcript_cross_reference(
     overwrite: bool = typer.Option(False, "--overwrite"),
     model_economy: str | None = typer.Option(None, "--model-economy"),
     model_judgment: str | None = typer.Option(None, "--model-judgment"),
+    max_clean_chars: int = typer.Option(DEFAULT_MAX_CLEAN_CHARS, "--max-clean-chars", min=1),
 ) -> None:
     project_config = load_project(project)
     client = _make_client(api_key)
     economy_model, judgment_model = _resolve_models(project_config.models, model_economy, model_judgment)
-    cleaned = clean_transcript(parse_transcript(transcript_path), client, economy_model)
+    cleaned = clean_transcript(parse_transcript(transcript_path), client, economy_model, max_clean_chars)
     summary = summarize_meeting(cleaned, client, judgment_model)
     reviews = cross_reference_focus_areas(summary, cleaned, project_config, client, economy_model)
     cleaned_path = derive_output_path(transcript_path, ".cleaned.md", output_dir)
@@ -202,11 +206,12 @@ def transcript_analysis(
     overwrite: bool = typer.Option(False, "--overwrite"),
     model_economy: str | None = typer.Option(None, "--model-economy"),
     model_judgment: str | None = typer.Option(None, "--model-judgment"),
+    max_clean_chars: int = typer.Option(DEFAULT_MAX_CLEAN_CHARS, "--max-clean-chars", min=1),
 ) -> None:
     project_config = load_project(project)
     client = _make_client(api_key)
     economy_model, judgment_model = _resolve_models(project_config.models, model_economy, model_judgment)
-    cleaned = clean_transcript(parse_transcript(transcript_path), client, economy_model)
+    cleaned = clean_transcript(parse_transcript(transcript_path), client, economy_model, max_clean_chars)
     summary = summarize_meeting(cleaned, client, judgment_model)
     reviews = cross_reference_focus_areas(summary, cleaned, project_config, client, economy_model)
     outputs = {

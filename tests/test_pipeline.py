@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from meeting_summarizer.analysis.pipeline import clean_transcript, cross_reference_focus_areas, summarize_meeting
+from meeting_summarizer.analysis.pipeline import chunk_transcript_segments, clean_transcript, cross_reference_focus_areas, summarize_meeting
 from meeting_summarizer.models import CleanTranscript, FocusArea, FocusAreaReview, MeetingSummary, ProjectConfig, TranscriptSegment
 
 
@@ -75,3 +75,30 @@ def test_cross_reference_returns_reviews() -> None:
     reviews = cross_reference_focus_areas(summary, cleaned, project, client, "gpt-5-mini")
     assert len(reviews) == 1
     assert isinstance(reviews[0], FocusAreaReview)
+
+
+def test_chunk_transcript_segments_walks_back_to_speaker_boundary() -> None:
+    segments = [
+        TranscriptSegment(speaker="Alice", start_time="00:00:01", text="A" * 40),
+        TranscriptSegment(speaker="Bob", start_time="00:00:02", text="B" * 40),
+        TranscriptSegment(speaker="Cara", start_time="00:00:03", text="C" * 40),
+    ]
+    chunks = chunk_transcript_segments(segments, max_chars=70)
+    assert [[segment.speaker for segment in chunk] for chunk in chunks] == [
+        ["Alice"],
+        ["Bob"],
+        ["Cara"],
+    ]
+
+
+def test_clean_transcript_cleans_multiple_chunks() -> None:
+    client = StubClient()
+    segments = [
+        TranscriptSegment(speaker="Alice", start_time="00:00:01", text="A" * 40),
+        TranscriptSegment(speaker="Bob", start_time="00:00:02", text="B" * 40),
+        TranscriptSegment(speaker="Cara", start_time="00:00:03", text="C" * 40),
+    ]
+    cleaned = clean_transcript(segments, client, "gpt-5-mini", max_chunk_chars=70)
+    clean_calls = [input_text for instructions, input_text in client.calls if "Return JSON with a 'segments' array" in instructions]
+    assert len(clean_calls) == 3
+    assert len(cleaned.segments) == 3

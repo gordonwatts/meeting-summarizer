@@ -42,7 +42,7 @@ def test_analysis_writes_all_outputs(workspace_tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(
         cli,
         "clean_transcript",
-        lambda segments, client, model: CleanTranscript(
+        lambda segments, client, model, max_chunk_chars=15000: CleanTranscript(
             segments=[TranscriptSegment(speaker="Alice", text="Cleaned sentence.", start_time="00:00:01")]
         ),
     )
@@ -90,3 +90,39 @@ def test_analysis_writes_all_outputs(workspace_tmp_path, monkeypatch) -> None:
     assert (workspace_tmp_path / "meeting.cleaned.md").exists()
     assert (workspace_tmp_path / "meeting.summary.md").exists()
     assert (workspace_tmp_path / "meeting.focus-areas.md").exists()
+
+
+def test_clean_command_passes_max_clean_chars(workspace_tmp_path, monkeypatch) -> None:
+    transcript_path = workspace_tmp_path / "meeting.vtt"
+    transcript_path.write_text(
+        "WEBVTT\n\n00:00:01.000 --> 00:00:03.000\nAlice: Hi.\n",
+        encoding="utf-8",
+    )
+
+    captured: dict[str, int] = {}
+    monkeypatch.setattr(cli, "_make_client", lambda api_key: FakeClient())
+
+    def fake_clean_transcript(segments, client, model, max_chunk_chars=15000):
+        captured["max_chunk_chars"] = max_chunk_chars
+        return CleanTranscript(
+            segments=[TranscriptSegment(speaker="Alice", text="Cleaned sentence.", start_time="00:00:01")]
+        )
+
+    monkeypatch.setattr(cli, "clean_transcript", fake_clean_transcript)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli.app,
+        [
+            "transcript",
+            "clean",
+            str(transcript_path),
+            "--api-key",
+            "secret",
+            "--overwrite",
+            "--max-clean-chars",
+            "321",
+        ],
+    )
+    assert result.exit_code == 0
+    assert captured["max_chunk_chars"] == 321
