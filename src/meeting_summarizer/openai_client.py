@@ -132,12 +132,12 @@ class OpenAIClient:
         try:
             cached = json.loads(cache_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
-            LOGGER.warning("Ignoring unreadable cache entry at %s", cache_path)
+            LOGGER.warning(f"Ignoring unreadable cache entry at {cache_path}")
             return None
         if not isinstance(cached, dict) or "payload" not in cached or not isinstance(cached["payload"], dict):
-            LOGGER.warning("Ignoring invalid cache entry at %s", cache_path)
+            LOGGER.warning(f"Ignoring invalid cache entry at {cache_path}")
             return None
-        LOGGER.debug("OpenAI cache hit model=%s path=%s", cached.get("model", "unknown"), cache_path)
+        LOGGER.debug(f"OpenAI cache hit model={cached.get('model', 'unknown')} path={cache_path}")
         return cached["payload"]
 
     def _write_cached_response(self, cache_path: Path, *, model: str, payload: dict[str, Any]) -> None:
@@ -162,7 +162,7 @@ class OpenAIClient:
         cached_payload = self._read_cached_response(cache_path)
         if cached_payload is not None:
             return cached_payload
-        LOGGER.debug("Calling OpenAI model=%s", model)
+        LOGGER.debug(f"Calling OpenAI model={model}")
         response = self._client.responses.create(
             model=model,
             instructions=instructions,

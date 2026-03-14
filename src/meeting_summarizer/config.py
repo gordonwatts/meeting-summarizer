@@ -47,5 +47,5 @@ def store_api_key(api_key: str) -> Path:
     entries[API_KEY_ENV_VAR] = api_key
     lines = [f"{key}={value}" for key, value in sorted(entries.items())]
     env_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    LOGGER.info("Stored API key in %s", env_path)
+    LOGGER.info(f"Stored API key in {env_path}")
     return env_path

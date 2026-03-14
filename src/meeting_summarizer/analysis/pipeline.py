@@ -56,7 +56,7 @@ def clean_transcript(
 ) -> CleanTranscript:
     LOGGER.info("Cleaning transcript")
     chunks = chunk_transcript_segments(segments, max_chars=max_chunk_chars)
-    LOGGER.debug("Cleaning transcript in %d chunk(s) with max_chunk_chars=%d", len(chunks), max_chunk_chars)
+    LOGGER.debug(f"Cleaning transcript in {len(chunks)} chunk(s) with max_chunk_chars={max_chunk_chars}")
     cleaned_segments: list[TranscriptSegment] = []
     for chunk in chunks:
         cleaned_segments.extend(clean_transcript_with_llm(client, model, chunk).segments)

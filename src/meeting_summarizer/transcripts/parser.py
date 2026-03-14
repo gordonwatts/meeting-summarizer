@@ -119,5 +119,5 @@ def _merge_adjacent_segments(segments: list[TranscriptSegment]) -> list[Transcri
             current.source_lineage.extend(segment.source_lineage)
         else:
             merged.append(segment)
-    LOGGER.debug("Parsed %d merged segments", len(merged))
+    LOGGER.debug(f"Parsed {len(merged)} merged segments")
     return merged

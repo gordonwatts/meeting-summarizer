@@ -60,7 +60,7 @@ def save_project(project: ProjectConfig, path: str | Path | None = None) -> Path
     if project.models:
         payload["models"] = project.models
     resolved.write_text(yaml.safe_dump(payload, sort_keys=False), encoding="utf-8")
-    LOGGER.info("Saved project to %s", resolved)
+    LOGGER.info(f"Saved project to {resolved}")
     project.path = resolved
     return resolved
 
