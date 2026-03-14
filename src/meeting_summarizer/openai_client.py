@@ -96,7 +96,6 @@ class OpenAIClient:
                 }
             ],
             text={"format": {"type": "json_object"}},
-            reasoning={"effort": "minimal"},
         )
         output_text = getattr(response, "output_text", None)
         if not output_text:
