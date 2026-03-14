@@ -72,8 +72,13 @@ def _write_markdown(output_path: Path, content: str, overwrite: bool) -> None:
     output_path.write_text(content, encoding="utf-8")
 
 
-def _should_skip_existing_output(output_path: Path, overwrite: bool) -> bool:
-    return output_path.exists() and not overwrite
+def _ensure_final_output_writable(output_path: Path, overwrite: bool) -> None:
+    if output_path.exists() and not overwrite:
+        raise typer.BadParameter(f"{output_path} already exists. Use --overwrite to replace it.")
+
+
+def _all_outputs_exist(output_paths: list[Path]) -> bool:
+    return all(output_path.exists() for output_path in output_paths)
 
 
 def _resolve_models(project_models: dict[str, str] | None, economy: str | None, judgment: str | None) -> tuple[str, str]:
@@ -93,7 +98,7 @@ def _load_or_clean_transcript(
     overwrite: bool,
 ) -> tuple[CleanTranscript, Path, bool]:
     cleaned_path = derive_output_path(transcript_path, ".cleaned.md", output_dir)
-    if cleaned_path.exists():
+    if cleaned_path.exists() and not overwrite:
         logger.info("Reusing existing cleaned transcript at %s", cleaned_path)
         cleaned = parse_cleaned_markdown(cleaned_path.read_text(encoding="utf-8"))
         return cleaned, cleaned_path, True
@@ -112,7 +117,7 @@ def _load_or_summarize_meeting(
     overwrite: bool,
 ) -> tuple[MeetingSummary, Path, bool]:
     summary_path = derive_output_path(transcript_path, ".summary.md", output_dir)
-    if summary_path.exists():
+    if summary_path.exists() and not overwrite:
         logger.info("Reusing existing meeting summary at %s", summary_path)
         summary = parse_summary_markdown(summary_path.read_text(encoding="utf-8"))
         return summary, summary_path, True
@@ -184,10 +189,7 @@ def transcript_clean(
     max_clean_chars: int = typer.Option(DEFAULT_MAX_CLEAN_CHARS, "--max-clean-chars", min=1),
 ) -> None:
     output_path = derive_output_path(transcript_path, ".cleaned.md", output_dir)
-    if _should_skip_existing_output(output_path, overwrite):
-        logger.info("Reusing existing cleaned transcript output at %s", output_path)
-        typer.echo(str(output_path))
-        return
+    _ensure_final_output_writable(output_path, overwrite)
     client = _make_client(api_key)
     economy_model, _ = _resolve_models(None, model_economy, None)
     cleaned = clean_transcript(parse_transcript(transcript_path), client, economy_model, max_clean_chars)
@@ -220,10 +222,7 @@ def transcript_summarize(
     max_clean_chars: int = typer.Option(DEFAULT_MAX_CLEAN_CHARS, "--max-clean-chars", min=1),
 ) -> None:
     summary_path = derive_output_path(transcript_path, ".summary.md", output_dir)
-    if _should_skip_existing_output(summary_path, overwrite):
-        logger.info("Reusing existing summary output at %s", summary_path)
-        typer.echo(str(summary_path))
-        return
+    _ensure_final_output_writable(summary_path, overwrite)
     client = _make_client(api_key)
     economy_model, judgment_model = _resolve_models(None, model_economy, model_judgment)
     cleaned, _, _ = _load_or_clean_transcript(
@@ -262,10 +261,7 @@ def transcript_cross_reference(
 ) -> None:
     project_config = load_project(project)
     focus_path = derive_output_path(transcript_path, ".focus-areas.md", output_dir)
-    if _should_skip_existing_output(focus_path, overwrite):
-        logger.info("Reusing existing focus-area output at %s", focus_path)
-        typer.echo(str(focus_path))
-        return
+    _ensure_final_output_writable(focus_path, overwrite)
     client = _make_client(api_key)
     economy_model, judgment_model = _resolve_models(project_config.models, model_economy, model_judgment)
     cleaned, _, _ = _load_or_clean_transcript(
@@ -305,39 +301,25 @@ def transcript_analysis(
     max_clean_chars: int = typer.Option(DEFAULT_MAX_CLEAN_CHARS, "--max-clean-chars", min=1),
 ) -> None:
     project_config = load_project(project)
+    cleaned_path = derive_output_path(transcript_path, ".cleaned.md", output_dir)
+    summary_path = derive_output_path(transcript_path, ".summary.md", output_dir)
     focus_path = derive_output_path(transcript_path, ".focus-areas.md", output_dir)
-    if _should_skip_existing_output(focus_path, overwrite):
-        logger.info("Reusing existing focus-area output at %s", focus_path)
-        for output_path in [
-            derive_output_path(transcript_path, ".cleaned.md", output_dir),
-            derive_output_path(transcript_path, ".summary.md", output_dir),
-            focus_path,
-        ]:
-            if output_path.exists():
-                typer.echo(str(output_path))
+    output_paths = [cleaned_path, summary_path, focus_path]
+    if not overwrite and _all_outputs_exist(output_paths):
+        logger.info("All analysis outputs already exist; returning without work.")
+        for output_path in output_paths:
+            typer.echo(str(output_path))
         return
     client = _make_client(api_key)
     economy_model, judgment_model = _resolve_models(project_config.models, model_economy, model_judgment)
-    cleaned, cleaned_path, reused_cleaned = _load_or_clean_transcript(
+    cleaned, cleaned_path, _ = _load_or_clean_transcript(
         transcript_path, output_dir, client, economy_model, max_clean_chars, overwrite
     )
-    summary, summary_path, reused_summary = _load_or_summarize_meeting(
+    summary, summary_path, _ = _load_or_summarize_meeting(
         transcript_path, output_dir, cleaned, client, judgment_model, overwrite
     )
-    reviews = cross_reference_focus_areas(summary, cleaned, project_config, client, economy_model)
-    outputs = {
-        focus_path: render_focus_area_markdown(reviews),
-    }
-    if not reused_cleaned:
-        outputs[cleaned_path] = render_cleaned_markdown(cleaned)
-    if not reused_summary:
-        outputs[summary_path] = render_summary_markdown(summary)
-    for output_path, content in outputs.items():
-        _write_markdown(output_path, content, overwrite)
-    emitted_paths = [cleaned_path, summary_path, *outputs]
-    seen_paths: set[Path] = set()
-    for output_path in emitted_paths:
-        if output_path in seen_paths:
-            continue
-        seen_paths.add(output_path)
+    if overwrite or not focus_path.exists():
+        reviews = cross_reference_focus_areas(summary, cleaned, project_config, client, economy_model)
+        _write_markdown(focus_path, render_focus_area_markdown(reviews), overwrite)
+    for output_path in output_paths:
         typer.echo(str(output_path))

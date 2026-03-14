@@ -9,7 +9,7 @@ from dotenv import dotenv_values
 LOGGER = logging.getLogger(__name__)
 API_KEY_ENV_VAR = "MEETING_SUMMARIZER_OPENAI_API_KEY"
 DEFAULT_MODEL_ECONOMY = "gpt-5-mini"
-DEFAULT_MODEL_JUDGMENT = "gpt-5"
+DEFAULT_MODEL_JUDGMENT = "gpt-5.4"
 DEFAULT_MAX_CLEAN_CHARS = 15_000
 
 

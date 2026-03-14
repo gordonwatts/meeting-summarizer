@@ -11,3 +11,5 @@ pytest-cache-files-*/
 uv-*.lock
 ./*.yaml
 2026-*
+.cache/
+ai-study-gruop.yaml

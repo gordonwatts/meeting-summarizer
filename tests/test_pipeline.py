@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from meeting_summarizer.analysis.pipeline import chunk_transcript_segments, clean_transcript, cross_reference_focus_areas, summarize_meeting
-from meeting_summarizer.models import CleanTranscript, FocusArea, FocusAreaReview, MeetingSummary, ProjectConfig, TranscriptSegment
-from meeting_summarizer.openai_client import cross_reference_with_llm
+from meeting_summarizer.models import CleanTranscript, FocusArea, FocusAreaReview, MeetingSummary, ProjectConfig, SummaryTheme, TranscriptSegment
+from meeting_summarizer.openai_client import cross_reference_with_llm, summarize_meeting_with_llm
 
 
 class StubClient:
@@ -64,7 +64,7 @@ def test_cross_reference_returns_reviews() -> None:
     cleaned = CleanTranscript(segments=[TranscriptSegment(speaker="Alice", text="Cleaned text.")])
     summary = MeetingSummary(
         paragraph="Summary paragraph.",
-        themes=["theme"],
+        themes=[SummaryTheme(title="theme")],
         action_items=[],
         resources=[],
         talk_points=[],
@@ -135,3 +135,25 @@ def test_cross_reference_normalizes_structured_review_items() -> None:
     assert review.action_items == ['Study group leads: Draft acceptance criteria. Quote: "We should define the acceptance path."']
     assert review.quotes == ['Alice: "We should define the acceptance path."']
     assert review.coverage_note == "Covered at a high level."
+
+
+def test_summary_normalizes_structured_themes_and_resources() -> None:
+    class StructuredSummaryClient:
+        def generate_json(self, *, model: str, instructions: str, input_text: str):
+            return {
+                "paragraph": "Summary paragraph.",
+                "themes": [{"topic": "Coordination", "details": ["Shared tooling", "Training"]}],
+                "action_items": [{"owner": "Alice", "description": "Follow up", "quote": "I will follow up."}],
+                "resources": [{"name": "Indigo", "type": "portal", "context": "Meeting archive"}],
+                "talk_points": [],
+            }
+
+    summary = summarize_meeting_with_llm(
+        StructuredSummaryClient(),
+        "gpt-5.4",
+        CleanTranscript(segments=[TranscriptSegment(speaker="Alice", text="Cleaned text.")]),
+    )
+
+    assert summary.themes == [SummaryTheme(title="Coordination", details=["Shared tooling", "Training"])]
+    assert summary.action_items[0].mentioner == "Alice"
+    assert summary.resources[0].name == "Indigo"

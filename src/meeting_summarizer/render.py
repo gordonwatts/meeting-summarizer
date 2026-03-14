@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from pathlib import Path
 import re
+from pathlib import Path
 
 from rich.console import Console
 from rich.table import Table
@@ -9,9 +9,11 @@ from rich.table import Table
 from meeting_summarizer.models import (
     ActionItem,
     CleanTranscript,
+    ExternalResource,
     FocusAreaReview,
     MeetingSummary,
     ProjectConfig,
+    SummaryTheme,
     TalkPoint,
     TranscriptSegment,
 )
@@ -21,6 +23,51 @@ def derive_output_path(transcript_path: str | Path, suffix: str, output_dir: str
     source_path = Path(transcript_path)
     directory = Path(output_dir) if output_dir else source_path.parent
     return directory / f"{source_path.stem}{suffix}"
+
+
+def _escape_table_cell(value: str | None) -> str:
+    if not value:
+        return ""
+    return value.replace("|", "\\|").replace("\n", "<br>")
+
+
+def _unescape_table_cell(value: str) -> str:
+    return value.replace("<br>", "\n").replace("\\|", "|").strip()
+
+
+def _render_markdown_table(headers: list[str], rows: list[list[str]]) -> list[str]:
+    lines = [
+        "| " + " | ".join(headers) + " |",
+        "| " + " | ".join("---" for _ in headers) + " |",
+    ]
+    if not rows:
+        lines.append("| " + " | ".join("None noted." if index == 0 else "" for index, _ in enumerate(headers)) + " |")
+        return lines
+    for row in rows:
+        lines.append("| " + " | ".join(_escape_table_cell(cell) for cell in row) + " |")
+    return lines
+
+
+def _parse_markdown_table(lines: list[str], start_index: int) -> tuple[list[dict[str, str]], int]:
+    header_line = lines[start_index].strip()
+    divider_line = lines[start_index + 1].strip()
+    if not (header_line.startswith("|") and divider_line.startswith("|")):
+        raise ValueError("Expected markdown table.")
+
+    headers = [_unescape_table_cell(cell) for cell in header_line.strip("|").split("|")]
+    rows: list[dict[str, str]] = []
+    index = start_index + 2
+    while index < len(lines):
+        stripped = lines[index].strip()
+        if not stripped.startswith("|"):
+            break
+        cells = [_unescape_table_cell(cell) for cell in stripped.strip("|").split("|")]
+        if len(cells) < len(headers):
+            cells.extend([""] * (len(headers) - len(cells)))
+        row = dict(zip(headers, cells))
+        rows.append(row)
+        index += 1
+    return rows, index
 
 
 def render_cleaned_markdown(cleaned: CleanTranscript) -> str:
@@ -80,24 +127,14 @@ def parse_cleaned_markdown(content: str) -> CleanTranscript:
 
 def render_summary_markdown(summary: MeetingSummary) -> str:
     lines = ["# Meeting Summary", "", summary.paragraph, "", "## Themes", ""]
-    if summary.themes:
-        lines.extend(f"- {theme}" for theme in summary.themes)
-    else:
-        lines.append("- None noted.")
+    theme_rows = [[theme.title, "; ".join(theme.details)] for theme in summary.themes]
+    lines.extend(_render_markdown_table(["Theme", "Details"], theme_rows))
     lines.extend(["", "## Action Items", ""])
-    if summary.action_items:
-        for item in summary.action_items:
-            line = f"- {item.mentioner}: {item.description}"
-            if item.quote:
-                line += f' Quote: "{item.quote}"'
-            lines.append(line)
-    else:
-        lines.append("- None noted.")
+    action_rows = [[item.mentioner, item.description, item.quote or ""] for item in summary.action_items]
+    lines.extend(_render_markdown_table(["Owner", "Action", "Quote"], action_rows))
     lines.extend(["", "## External Resources", ""])
-    if summary.resources:
-        lines.extend(f"- {resource}" for resource in summary.resources)
-    else:
-        lines.append("- None noted.")
+    resource_rows = [[resource.name, resource.resource_type or "", resource.context or ""] for resource in summary.resources]
+    lines.extend(_render_markdown_table(["Resource", "Type", "Context"], resource_rows))
     lines.extend(["", "## Talk Highlights", ""])
     for talk in summary.talk_points:
         lines.extend([f"### {talk.speaker}", "", "Salient points:"])
@@ -118,14 +155,12 @@ def parse_summary_markdown(content: str) -> MeetingSummary:
 
     section = "paragraph"
     paragraph_lines: list[str] = []
-    themes: list[str] = []
+    themes: list[SummaryTheme] = []
     action_items: list[ActionItem] = []
-    resources: list[str] = []
+    resources: list[ExternalResource] = []
     talk_points: list[TalkPoint] = []
     current_talk: TalkPoint | None = None
     talk_subsection: str | None = None
-
-    action_item_pattern = re.compile(r'^- (?P<mentioner>.*?): (?P<description>.*?)(?: Quote: "(?P<quote>.*)")?$')
 
     def normalize_bullets(items: list[str]) -> list[str]:
         return [] if items == ["None noted."] else items
@@ -140,81 +175,112 @@ def parse_summary_markdown(content: str) -> MeetingSummary:
         talk_points.append(current_talk)
         current_talk = None
 
-    for line in lines[1:]:
+    index = 1
+    while index < len(lines):
+        line = lines[index]
         stripped = line.strip()
         if stripped == "## Themes":
             flush_talk()
             section = "themes"
+            index += 1
             continue
         if stripped == "## Action Items":
             flush_talk()
             section = "action_items"
+            index += 1
             continue
         if stripped == "## External Resources":
             flush_talk()
             section = "resources"
+            index += 1
             continue
         if stripped == "## Talk Highlights":
             flush_talk()
             section = "talk_highlights"
+            index += 1
             continue
         if line.startswith("### "):
             flush_talk()
             current_talk = TalkPoint(speaker=line[4:].strip(), salient_points=[], questions=[], quotes=[])
             talk_subsection = None
+            index += 1
             continue
         if stripped == "Salient points:":
             talk_subsection = "salient_points"
+            index += 1
             continue
         if stripped == "Questions:":
             talk_subsection = "questions"
+            index += 1
             continue
         if stripped == "Quotes:":
             talk_subsection = "quotes"
+            index += 1
             continue
         if not stripped:
+            index += 1
             continue
 
         if section == "paragraph":
             paragraph_lines.append(line)
+            index += 1
             continue
-        if section == "themes" and line.startswith("- "):
-            themes.append(line[2:])
-            continue
-        if section == "action_items" and line.startswith("- "):
-            if line == "- None noted.":
-                continue
-            match = action_item_pattern.match(line)
-            if match is None:
-                raise ValueError("Action item markdown is not in the expected format.")
-            action_items.append(
-                ActionItem(
-                    mentioner=match.group("mentioner"),
-                    description=match.group("description"),
-                    quote=match.group("quote"),
+        if section == "themes" and stripped.startswith("|"):
+            rows, index = _parse_markdown_table(lines, index)
+            themes = [
+                SummaryTheme(
+                    title=row.get("Theme", ""),
+                    details=normalize_bullets([item.strip() for item in row.get("Details", "").split(";") if item.strip()]),
                 )
-            )
+                for row in rows
+                if row.get("Theme", "") != "None noted."
+            ]
             continue
-        if section == "resources" and line.startswith("- "):
-            resources.append(line[2:])
+        if section == "action_items" and stripped.startswith("|"):
+            rows, index = _parse_markdown_table(lines, index)
+            action_items = [
+                ActionItem(
+                    mentioner=row.get("Owner", ""),
+                    description=row.get("Action", ""),
+                    quote=row.get("Quote") or None,
+                )
+                for row in rows
+                if row.get("Owner", "") != "None noted."
+            ]
+            continue
+        if section == "resources" and stripped.startswith("|"):
+            rows, index = _parse_markdown_table(lines, index)
+            resources = [
+                ExternalResource(
+                    name=row.get("Resource", ""),
+                    resource_type=row.get("Type") or None,
+                    context=row.get("Context") or None,
+                )
+                for row in rows
+                if row.get("Resource", "") != "None noted."
+            ]
             continue
         if section == "talk_highlights" and current_talk is not None:
             if talk_subsection == "salient_points" and line.startswith("- "):
                 current_talk.salient_points.append(line[2:])
+                index += 1
                 continue
             if talk_subsection == "questions" and line.startswith("- "):
                 current_talk.questions.append(line[2:])
+                index += 1
                 continue
             if talk_subsection == "quotes" and line.startswith('- "') and line.endswith('"'):
                 current_talk.quotes.append(line[3:-1])
+                index += 1
                 continue
+        index += 1
 
     flush_talk()
     return MeetingSummary(
         paragraph="\n".join(paragraph_lines).strip(),
-        themes=normalize_bullets(themes),
+        themes=themes,
         action_items=action_items,
-        resources=normalize_bullets(resources),
+        resources=resources,
         talk_points=talk_points,
     )
 
