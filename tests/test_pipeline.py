@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from meeting_summarizer.analysis.pipeline import chunk_transcript_segments, clean_transcript, cross_reference_focus_areas, summarize_meeting
 from meeting_summarizer.models import CleanTranscript, FocusArea, FocusAreaReview, MeetingSummary, ProjectConfig, TranscriptSegment
+from meeting_summarizer.openai_client import cross_reference_with_llm
 
 
 class StubClient:
@@ -102,3 +103,35 @@ def test_clean_transcript_cleans_multiple_chunks() -> None:
     clean_calls = [input_text for instructions, input_text in client.calls if "Return JSON with a 'segments' array" in instructions]
     assert len(clean_calls) == 3
     assert len(cleaned.segments) == 3
+
+
+def test_cross_reference_normalizes_structured_review_items() -> None:
+    class StructuredStubClient:
+        def generate_json(self, *, model: str, instructions: str, input_text: str):
+            return {
+                "relevant_points": [{"speaker": "Alice", "text": "Raised validation requirements."}],
+                "outstanding_questions": [{"title": "Validation", "description": "Who approves the standard?"}],
+                "action_items": [
+                    {
+                        "owner": "Study group leads",
+                        "task": "Draft acceptance criteria.",
+                        "quote": "We should define the acceptance path.",
+                    }
+                ],
+                "quotes": [{"speaker": "Alice", "quote": "We should define the acceptance path."}],
+                "coverage_note": {"summary": "Covered at a high level."},
+            }
+
+    review = cross_reference_with_llm(
+        StructuredStubClient(),
+        "gpt-5-mini",
+        MeetingSummary(paragraph="Summary paragraph.", themes=[], action_items=[], resources=[], talk_points=[]),
+        CleanTranscript(segments=[TranscriptSegment(speaker="Alice", text="Cleaned text.")]),
+        FocusArea(id="tracking", title="Tracking", description="desc"),
+    )
+
+    assert review.relevant_points == ["Alice: Raised validation requirements."]
+    assert review.outstanding_questions == ["Validation: Who approves the standard?"]
+    assert review.action_items == ['Study group leads: Draft acceptance criteria. Quote: "We should define the acceptance path."']
+    assert review.quotes == ['Alice: "We should define the acceptance path."']
+    assert review.coverage_note == "Covered at a high level."

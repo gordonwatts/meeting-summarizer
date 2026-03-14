@@ -20,6 +20,59 @@ from meeting_summarizer.models import (
 LOGGER = logging.getLogger(__name__)
 
 
+def _coerce_text(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, (int, float, bool)):
+        return str(value)
+    if isinstance(value, list):
+        parts = [_coerce_text(item) for item in value]
+        return "; ".join(part for part in parts if part)
+    if isinstance(value, dict):
+        actor = _coerce_text(
+            value.get("owner")
+            or value.get("mentioner")
+            or value.get("speaker")
+            or value.get("title")
+        )
+        quote = _coerce_text(value.get("quote"))
+        if actor and quote and not any(
+            value.get(field) for field in ("task", "description", "text", "summary", "note", "coverage_note")
+        ):
+            return f'{actor}: "{quote}"'
+        main_text = _coerce_text(
+            value.get("task")
+            or value.get("description")
+            or value.get("text")
+            or value.get("summary")
+            or value.get("note")
+            or value.get("coverage_note")
+        )
+        if actor and main_text:
+            line = f"{actor}: {main_text}"
+        else:
+            ordered_parts = [
+                f"{key.replace('_', ' ')}: {_coerce_text(item)}"
+                for key, item in value.items()
+                if _coerce_text(item)
+            ]
+            line = "; ".join(ordered_parts)
+        if quote:
+            return f'{line} Quote: "{quote}"' if line else quote
+        return line
+    return str(value)
+
+
+def _coerce_text_list(values: Any) -> list[str]:
+    if not isinstance(values, list):
+        text = _coerce_text(values)
+        return [text] if text else []
+    items = [_coerce_text(value) for value in values]
+    return [item for item in items if item]
+
+
 class OpenAIClient:
     def __init__(self, api_key: str):
         self._client = OpenAI(api_key=api_key)
@@ -43,7 +96,6 @@ class OpenAIClient:
                 }
             ],
             text={"format": {"type": "json_object"}},
-            reasoning={"effort": "minimal"},
         )
         output_text = getattr(response, "output_text", None)
         if not output_text:
@@ -149,9 +201,9 @@ def cross_reference_with_llm(
     )
     return FocusAreaReview(
         focus_area=focus_area,
-        relevant_points=list(payload.get("relevant_points", [])),
-        outstanding_questions=list(payload.get("outstanding_questions", [])),
-        action_items=list(payload.get("action_items", [])),
-        quotes=list(payload.get("quotes", [])),
-        coverage_note=payload.get("coverage_note", "No coverage note provided."),
+        relevant_points=_coerce_text_list(payload.get("relevant_points", [])),
+        outstanding_questions=_coerce_text_list(payload.get("outstanding_questions", [])),
+        action_items=_coerce_text_list(payload.get("action_items", [])),
+        quotes=_coerce_text_list(payload.get("quotes", [])),
+        coverage_note=_coerce_text(payload.get("coverage_note")) or "No coverage note provided.",
     )

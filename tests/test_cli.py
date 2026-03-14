@@ -128,6 +128,27 @@ def test_clean_command_passes_max_clean_chars(workspace_tmp_path, monkeypatch) -
     assert captured["max_chunk_chars"] == 321
 
 
+def test_clean_reuses_existing_output_before_creating_client(workspace_tmp_path, monkeypatch) -> None:
+    transcript_path = workspace_tmp_path / "meeting.vtt"
+    transcript_path.write_text(
+        "WEBVTT\n\n00:00:01.000 --> 00:00:03.000\nAlice: Hi.\n",
+        encoding="utf-8",
+    )
+    cleaned_path = workspace_tmp_path / "meeting.cleaned.md"
+    cleaned_path.write_text("# Cleaned Transcript\n", encoding="utf-8")
+
+    def fail_make_client(*args, **kwargs):
+        raise AssertionError("_make_client should not be called when cleaned output already exists")
+
+    monkeypatch.setattr(cli, "_make_client", fail_make_client)
+
+    runner = CliRunner()
+    result = runner.invoke(cli.app, ["transcript", "clean", str(transcript_path), "--api-key", "secret"])
+
+    assert result.exit_code == 0
+    assert str(cleaned_path) in result.stdout
+
+
 def test_summarize_reuses_existing_cleaned_markdown(workspace_tmp_path, monkeypatch) -> None:
     transcript_path = workspace_tmp_path / "meeting.vtt"
     transcript_path.write_text(
@@ -190,7 +211,10 @@ def test_summarize_reuses_existing_summary_markdown(workspace_tmp_path, monkeypa
         encoding="utf-8",
     )
 
-    monkeypatch.setattr(cli, "_make_client", lambda api_key: FakeClient())
+    def fail_make_client(*args, **kwargs):
+        raise AssertionError("_make_client should not be called when summary output already exists")
+
+    monkeypatch.setattr(cli, "_make_client", fail_make_client)
 
     def fail_summarize_meeting(*args, **kwargs):
         raise AssertionError("summarize_meeting should not be called when summary markdown exists")
@@ -323,6 +347,35 @@ def test_cross_reference_reuses_existing_cleaned_markdown(workspace_tmp_path, mo
     assert "Existing summary paragraph." in (workspace_tmp_path / "meeting.focus-areas.md").read_text(encoding="utf-8")
 
 
+def test_cross_reference_reuses_existing_focus_output_before_creating_client(workspace_tmp_path, monkeypatch) -> None:
+    transcript_path = workspace_tmp_path / "meeting.vtt"
+    transcript_path.write_text(
+        "WEBVTT\n\n00:00:01.000 --> 00:00:03.000\nAlice: Hi.\n",
+        encoding="utf-8",
+    )
+    project_path = workspace_tmp_path / "project.yaml"
+    project_path.write_text(
+        "name: Committee\nfocus_areas:\n  - id: tracking\n    title: Tracking\n    description: desc\n",
+        encoding="utf-8",
+    )
+    focus_path = workspace_tmp_path / "meeting.focus-areas.md"
+    focus_path.write_text("# Focus Area Cross Reference\n", encoding="utf-8")
+
+    def fail_make_client(*args, **kwargs):
+        raise AssertionError("_make_client should not be called when focus-area output already exists")
+
+    monkeypatch.setattr(cli, "_make_client", fail_make_client)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli.app,
+        ["transcript", "cross-reference", str(transcript_path), "--project", str(project_path), "--api-key", "secret"],
+    )
+
+    assert result.exit_code == 0
+    assert str(focus_path) in result.stdout
+
+
 def test_analysis_reuses_existing_cleaned_markdown(workspace_tmp_path, monkeypatch) -> None:
     transcript_path = workspace_tmp_path / "meeting.vtt"
     transcript_path.write_text(
@@ -387,3 +440,36 @@ def test_analysis_reuses_existing_cleaned_markdown(workspace_tmp_path, monkeypat
     assert "Existing summary paragraph." in (workspace_tmp_path / "meeting.summary.md").read_text(encoding="utf-8")
     assert "Existing cleaned text." in (workspace_tmp_path / "meeting.focus-areas.md").read_text(encoding="utf-8")
     assert "Existing summary paragraph." in (workspace_tmp_path / "meeting.focus-areas.md").read_text(encoding="utf-8")
+
+
+def test_analysis_reuses_existing_focus_output_before_creating_client(workspace_tmp_path, monkeypatch) -> None:
+    transcript_path = workspace_tmp_path / "meeting.vtt"
+    transcript_path.write_text(
+        "WEBVTT\n\n00:00:01.000 --> 00:00:03.000\nAlice: Hi.\n",
+        encoding="utf-8",
+    )
+    (workspace_tmp_path / "meeting.cleaned.md").write_text("# Cleaned Transcript\n", encoding="utf-8")
+    (workspace_tmp_path / "meeting.summary.md").write_text("# Meeting Summary\n", encoding="utf-8")
+    focus_path = workspace_tmp_path / "meeting.focus-areas.md"
+    focus_path.write_text("# Focus Area Cross Reference\n", encoding="utf-8")
+    project_path = workspace_tmp_path / "project.yaml"
+    project_path.write_text(
+        "name: Committee\nfocus_areas:\n  - id: tracking\n    title: Tracking\n    description: desc\n",
+        encoding="utf-8",
+    )
+
+    def fail_make_client(*args, **kwargs):
+        raise AssertionError("_make_client should not be called when focus-area output already exists")
+
+    monkeypatch.setattr(cli, "_make_client", fail_make_client)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli.app,
+        ["transcript", "analysis", str(transcript_path), "--project", str(project_path), "--api-key", "secret"],
+    )
+
+    assert result.exit_code == 0
+    assert str(workspace_tmp_path / "meeting.cleaned.md") in result.stdout
+    assert str(workspace_tmp_path / "meeting.summary.md") in result.stdout
+    assert str(focus_path) in result.stdout

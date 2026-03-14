@@ -72,6 +72,10 @@ def _write_markdown(output_path: Path, content: str, overwrite: bool) -> None:
     output_path.write_text(content, encoding="utf-8")
 
 
+def _should_skip_existing_output(output_path: Path, overwrite: bool) -> bool:
+    return output_path.exists() and not overwrite
+
+
 def _resolve_models(project_models: dict[str, str] | None, economy: str | None, judgment: str | None) -> tuple[str, str]:
     models = project_models or {}
     return (
@@ -171,13 +175,22 @@ def transcript_clean(
     api_key: str | None = typer.Option(None, "--api-key"),
     output_dir: str | None = typer.Option(None, "--output-dir"),
     overwrite: bool = typer.Option(False, "--overwrite"),
-    model_economy: str | None = typer.Option(None, "--model-economy"),
+    model_economy: str | None = typer.Option(
+        None,
+        "--model-economy",
+        help="Model used for the transcript cleaning phase.",
+        show_default=DEFAULT_MODEL_ECONOMY,
+    ),
     max_clean_chars: int = typer.Option(DEFAULT_MAX_CLEAN_CHARS, "--max-clean-chars", min=1),
 ) -> None:
+    output_path = derive_output_path(transcript_path, ".cleaned.md", output_dir)
+    if _should_skip_existing_output(output_path, overwrite):
+        logger.info("Reusing existing cleaned transcript output at %s", output_path)
+        typer.echo(str(output_path))
+        return
     client = _make_client(api_key)
     economy_model, _ = _resolve_models(None, model_economy, None)
     cleaned = clean_transcript(parse_transcript(transcript_path), client, economy_model, max_clean_chars)
-    output_path = derive_output_path(transcript_path, ".cleaned.md", output_dir)
     _write_markdown(output_path, render_cleaned_markdown(cleaned), overwrite)
     typer.echo(str(output_path))
 
@@ -192,10 +205,25 @@ def transcript_summarize(
     api_key: str | None = typer.Option(None, "--api-key"),
     output_dir: str | None = typer.Option(None, "--output-dir"),
     overwrite: bool = typer.Option(False, "--overwrite"),
-    model_economy: str | None = typer.Option(None, "--model-economy"),
-    model_judgment: str | None = typer.Option(None, "--model-judgment"),
+    model_economy: str | None = typer.Option(
+        None,
+        "--model-economy",
+        help="Model used for the transcript cleaning phase.",
+        show_default=DEFAULT_MODEL_ECONOMY,
+    ),
+    model_judgment: str | None = typer.Option(
+        None,
+        "--model-judgment",
+        help="Model used for the meeting summarization phase.",
+        show_default=DEFAULT_MODEL_JUDGMENT,
+    ),
     max_clean_chars: int = typer.Option(DEFAULT_MAX_CLEAN_CHARS, "--max-clean-chars", min=1),
 ) -> None:
+    summary_path = derive_output_path(transcript_path, ".summary.md", output_dir)
+    if _should_skip_existing_output(summary_path, overwrite):
+        logger.info("Reusing existing summary output at %s", summary_path)
+        typer.echo(str(summary_path))
+        return
     client = _make_client(api_key)
     economy_model, judgment_model = _resolve_models(None, model_economy, model_judgment)
     cleaned, _, _ = _load_or_clean_transcript(
@@ -218,11 +246,26 @@ def transcript_cross_reference(
     api_key: str | None = typer.Option(None, "--api-key"),
     output_dir: str | None = typer.Option(None, "--output-dir"),
     overwrite: bool = typer.Option(False, "--overwrite"),
-    model_economy: str | None = typer.Option(None, "--model-economy"),
-    model_judgment: str | None = typer.Option(None, "--model-judgment"),
+    model_economy: str | None = typer.Option(
+        None,
+        "--model-economy",
+        help="Model used for transcript cleaning and focus-area cross-reference phases.",
+        show_default=DEFAULT_MODEL_ECONOMY,
+    ),
+    model_judgment: str | None = typer.Option(
+        None,
+        "--model-judgment",
+        help="Model used for the meeting summarization phase.",
+        show_default=DEFAULT_MODEL_JUDGMENT,
+    ),
     max_clean_chars: int = typer.Option(DEFAULT_MAX_CLEAN_CHARS, "--max-clean-chars", min=1),
 ) -> None:
     project_config = load_project(project)
+    focus_path = derive_output_path(transcript_path, ".focus-areas.md", output_dir)
+    if _should_skip_existing_output(focus_path, overwrite):
+        logger.info("Reusing existing focus-area output at %s", focus_path)
+        typer.echo(str(focus_path))
+        return
     client = _make_client(api_key)
     economy_model, judgment_model = _resolve_models(project_config.models, model_economy, model_judgment)
     cleaned, _, _ = _load_or_clean_transcript(
@@ -232,7 +275,6 @@ def transcript_cross_reference(
         transcript_path, output_dir, cleaned, client, judgment_model, overwrite
     )
     reviews = cross_reference_focus_areas(summary, cleaned, project_config, client, economy_model)
-    focus_path = derive_output_path(transcript_path, ".focus-areas.md", output_dir)
     _write_markdown(focus_path, render_focus_area_markdown(reviews), overwrite)
     typer.echo(str(focus_path))
 
@@ -248,11 +290,32 @@ def transcript_analysis(
     api_key: str | None = typer.Option(None, "--api-key"),
     output_dir: str | None = typer.Option(None, "--output-dir"),
     overwrite: bool = typer.Option(False, "--overwrite"),
-    model_economy: str | None = typer.Option(None, "--model-economy"),
-    model_judgment: str | None = typer.Option(None, "--model-judgment"),
+    model_economy: str | None = typer.Option(
+        None,
+        "--model-economy",
+        help="Model used for transcript cleaning and focus-area cross-reference phases.",
+        show_default=DEFAULT_MODEL_ECONOMY,
+    ),
+    model_judgment: str | None = typer.Option(
+        None,
+        "--model-judgment",
+        help="Model used for the meeting summarization phase.",
+        show_default=DEFAULT_MODEL_JUDGMENT,
+    ),
     max_clean_chars: int = typer.Option(DEFAULT_MAX_CLEAN_CHARS, "--max-clean-chars", min=1),
 ) -> None:
     project_config = load_project(project)
+    focus_path = derive_output_path(transcript_path, ".focus-areas.md", output_dir)
+    if _should_skip_existing_output(focus_path, overwrite):
+        logger.info("Reusing existing focus-area output at %s", focus_path)
+        for output_path in [
+            derive_output_path(transcript_path, ".cleaned.md", output_dir),
+            derive_output_path(transcript_path, ".summary.md", output_dir),
+            focus_path,
+        ]:
+            if output_path.exists():
+                typer.echo(str(output_path))
+        return
     client = _make_client(api_key)
     economy_model, judgment_model = _resolve_models(project_config.models, model_economy, model_judgment)
     cleaned, cleaned_path, reused_cleaned = _load_or_clean_transcript(
@@ -263,7 +326,7 @@ def transcript_analysis(
     )
     reviews = cross_reference_focus_areas(summary, cleaned, project_config, client, economy_model)
     outputs = {
-        derive_output_path(transcript_path, ".focus-areas.md", output_dir): render_focus_area_markdown(reviews),
+        focus_path: render_focus_area_markdown(reviews),
     }
     if not reused_cleaned:
         outputs[cleaned_path] = render_cleaned_markdown(cleaned)
