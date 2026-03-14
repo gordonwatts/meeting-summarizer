@@ -171,7 +171,12 @@ def transcript_clean(
     api_key: str | None = typer.Option(None, "--api-key"),
     output_dir: str | None = typer.Option(None, "--output-dir"),
     overwrite: bool = typer.Option(False, "--overwrite"),
-    model_economy: str | None = typer.Option(None, "--model-economy"),
+    model_economy: str | None = typer.Option(
+        None,
+        "--model-economy",
+        help="Model used for the transcript cleaning phase.",
+        show_default=DEFAULT_MODEL_ECONOMY,
+    ),
     max_clean_chars: int = typer.Option(DEFAULT_MAX_CLEAN_CHARS, "--max-clean-chars", min=1),
 ) -> None:
     client = _make_client(api_key)
@@ -192,8 +197,18 @@ def transcript_summarize(
     api_key: str | None = typer.Option(None, "--api-key"),
     output_dir: str | None = typer.Option(None, "--output-dir"),
     overwrite: bool = typer.Option(False, "--overwrite"),
-    model_economy: str | None = typer.Option(None, "--model-economy"),
-    model_judgment: str | None = typer.Option(None, "--model-judgment"),
+    model_economy: str | None = typer.Option(
+        None,
+        "--model-economy",
+        help="Model used for the transcript cleaning phase.",
+        show_default=DEFAULT_MODEL_ECONOMY,
+    ),
+    model_judgment: str | None = typer.Option(
+        None,
+        "--model-judgment",
+        help="Model used for the meeting summarization phase.",
+        show_default=DEFAULT_MODEL_JUDGMENT,
+    ),
     max_clean_chars: int = typer.Option(DEFAULT_MAX_CLEAN_CHARS, "--max-clean-chars", min=1),
 ) -> None:
     client = _make_client(api_key)
@@ -218,8 +233,18 @@ def transcript_cross_reference(
     api_key: str | None = typer.Option(None, "--api-key"),
     output_dir: str | None = typer.Option(None, "--output-dir"),
     overwrite: bool = typer.Option(False, "--overwrite"),
-    model_economy: str | None = typer.Option(None, "--model-economy"),
-    model_judgment: str | None = typer.Option(None, "--model-judgment"),
+    model_economy: str | None = typer.Option(
+        None,
+        "--model-economy",
+        help="Model used for transcript cleaning and focus-area cross-reference phases.",
+        show_default=DEFAULT_MODEL_ECONOMY,
+    ),
+    model_judgment: str | None = typer.Option(
+        None,
+        "--model-judgment",
+        help="Model used for the meeting summarization phase.",
+        show_default=DEFAULT_MODEL_JUDGMENT,
+    ),
     max_clean_chars: int = typer.Option(DEFAULT_MAX_CLEAN_CHARS, "--max-clean-chars", min=1),
 ) -> None:
     project_config = load_project(project)
@@ -248,8 +273,18 @@ def transcript_analysis(
     api_key: str | None = typer.Option(None, "--api-key"),
     output_dir: str | None = typer.Option(None, "--output-dir"),
     overwrite: bool = typer.Option(False, "--overwrite"),
-    model_economy: str | None = typer.Option(None, "--model-economy"),
-    model_judgment: str | None = typer.Option(None, "--model-judgment"),
+    model_economy: str | None = typer.Option(
+        None,
+        "--model-economy",
+        help="Model used for transcript cleaning and focus-area cross-reference phases.",
+        show_default=DEFAULT_MODEL_ECONOMY,
+    ),
+    model_judgment: str | None = typer.Option(
+        None,
+        "--model-judgment",
+        help="Model used for the meeting summarization phase.",
+        show_default=DEFAULT_MODEL_JUDGMENT,
+    ),
     max_clean_chars: int = typer.Option(DEFAULT_MAX_CLEAN_CHARS, "--max-clean-chars", min=1),
 ) -> None:
     project_config = load_project(project)
