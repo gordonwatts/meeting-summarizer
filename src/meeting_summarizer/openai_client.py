@@ -66,9 +66,12 @@ def clean_transcript_with_llm(client: OpenAIClient, model: str, segments: list[T
         model=model,
         instructions=(
             "Rewrite the transcript to remove filler words, false starts, and operational chatter "
-            "that is not substantive. Preserve meaning and keep full sentences. Do not summarize. "
-            "Return JSON with a 'segments' array. Each segment must include speaker, text, start_time, "
-            "end_time, and source_lineage."
+            "that is not substantive. Drop brief acknowledgments, mic and recording logistics, "
+            "room setup chatter, scheduling side comments, greetings, transitions into the meeting, "
+            "and other administrative exchange unless they materially affect the substance of the "
+            "discussion. Preserve meaning for substantive content and keep full sentences. Do not "
+            "summarize, paraphrase away decisions, or invent content. Return JSON with a 'segments' "
+            "array. Each segment must include speaker, text, start_time, end_time, and source_lineage."
         ),
         input_text=transcript_to_text(segments),
     )
