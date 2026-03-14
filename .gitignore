@@ -10,3 +10,4 @@ meeting-summarizer-*/
 pytest-cache-files-*/
 uv-*.lock
 ./*.yaml
+2026-*
