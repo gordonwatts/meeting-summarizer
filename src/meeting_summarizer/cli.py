@@ -16,12 +16,13 @@ from meeting_summarizer.config import (
     store_api_key,
 )
 from meeting_summarizer.logging_config import configure_logging
-from meeting_summarizer.models import CleanTranscript
+from meeting_summarizer.models import CleanTranscript, MeetingSummary
 from meeting_summarizer.openai_client import OpenAIClient
 from meeting_summarizer.project import add_focus_area, init_project, load_project
 from meeting_summarizer.render import (
     derive_output_path,
     parse_cleaned_markdown,
+    parse_summary_markdown,
     render_cleaned_markdown,
     render_focus_area_markdown,
     render_summary_markdown,
@@ -96,6 +97,25 @@ def _load_or_clean_transcript(
     cleaned = clean_transcript(parse_transcript(transcript_path), client, economy_model, max_clean_chars)
     _write_markdown(cleaned_path, render_cleaned_markdown(cleaned), overwrite)
     return cleaned, cleaned_path, False
+
+
+def _load_or_summarize_meeting(
+    transcript_path: str,
+    output_dir: str | None,
+    cleaned: CleanTranscript,
+    client: OpenAIClient,
+    judgment_model: str,
+    overwrite: bool,
+) -> tuple[MeetingSummary, Path, bool]:
+    summary_path = derive_output_path(transcript_path, ".summary.md", output_dir)
+    if summary_path.exists():
+        logger.info("Reusing existing meeting summary at %s", summary_path)
+        summary = parse_summary_markdown(summary_path.read_text(encoding="utf-8"))
+        return summary, summary_path, True
+
+    summary = summarize_meeting(cleaned, client, judgment_model)
+    _write_markdown(summary_path, render_summary_markdown(summary), overwrite)
+    return summary, summary_path, False
 
 
 @project_app.command(
@@ -181,9 +201,9 @@ def transcript_summarize(
     cleaned, _, _ = _load_or_clean_transcript(
         transcript_path, output_dir, client, economy_model, max_clean_chars, overwrite
     )
-    summary = summarize_meeting(cleaned, client, judgment_model)
-    summary_path = derive_output_path(transcript_path, ".summary.md", output_dir)
-    _write_markdown(summary_path, render_summary_markdown(summary), overwrite)
+    _, summary_path, _ = _load_or_summarize_meeting(
+        transcript_path, output_dir, cleaned, client, judgment_model, overwrite
+    )
     typer.echo(str(summary_path))
 
 
@@ -208,11 +228,11 @@ def transcript_cross_reference(
     cleaned, _, _ = _load_or_clean_transcript(
         transcript_path, output_dir, client, economy_model, max_clean_chars, overwrite
     )
-    summary = summarize_meeting(cleaned, client, judgment_model)
+    summary, _, _ = _load_or_summarize_meeting(
+        transcript_path, output_dir, cleaned, client, judgment_model, overwrite
+    )
     reviews = cross_reference_focus_areas(summary, cleaned, project_config, client, economy_model)
-    summary_path = derive_output_path(transcript_path, ".summary.md", output_dir)
     focus_path = derive_output_path(transcript_path, ".focus-areas.md", output_dir)
-    _write_markdown(summary_path, render_summary_markdown(summary), overwrite)
     _write_markdown(focus_path, render_focus_area_markdown(reviews), overwrite)
     typer.echo(str(focus_path))
 
@@ -238,15 +258,23 @@ def transcript_analysis(
     cleaned, cleaned_path, reused_cleaned = _load_or_clean_transcript(
         transcript_path, output_dir, client, economy_model, max_clean_chars, overwrite
     )
-    summary = summarize_meeting(cleaned, client, judgment_model)
+    summary, summary_path, reused_summary = _load_or_summarize_meeting(
+        transcript_path, output_dir, cleaned, client, judgment_model, overwrite
+    )
     reviews = cross_reference_focus_areas(summary, cleaned, project_config, client, economy_model)
     outputs = {
-        derive_output_path(transcript_path, ".summary.md", output_dir): render_summary_markdown(summary),
         derive_output_path(transcript_path, ".focus-areas.md", output_dir): render_focus_area_markdown(reviews),
     }
     if not reused_cleaned:
         outputs[cleaned_path] = render_cleaned_markdown(cleaned)
+    if not reused_summary:
+        outputs[summary_path] = render_summary_markdown(summary)
     for output_path, content in outputs.items():
         _write_markdown(output_path, content, overwrite)
-    for output_path in outputs:
+    emitted_paths = [cleaned_path, summary_path, *outputs]
+    seen_paths: set[Path] = set()
+    for output_path in emitted_paths:
+        if output_path in seen_paths:
+            continue
+        seen_paths.add(output_path)
         typer.echo(str(output_path))

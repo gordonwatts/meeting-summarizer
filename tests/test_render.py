@@ -48,3 +48,19 @@ def test_parse_cleaned_markdown_round_trips_segments() -> None:
     parsed = parse_cleaned_markdown(render_cleaned_markdown(cleaned))
 
     assert parsed == cleaned
+
+
+def test_parse_summary_markdown_round_trips_summary() -> None:
+    summary = MeetingSummary(
+        paragraph="The meeting covered tracking and operations.",
+        themes=["tracking"],
+        action_items=[ActionItem(mentioner="Alice", description="Follow up", quote="I'll follow up.")],
+        resources=["example.com"],
+        talk_points=[TalkPoint(speaker="Alice", salient_points=["Point"], questions=["Question"], quotes=["Quote"])],
+    )
+
+    from meeting_summarizer.render import parse_summary_markdown
+
+    parsed = parse_summary_markdown(render_summary_markdown(summary))
+
+    assert parsed == summary

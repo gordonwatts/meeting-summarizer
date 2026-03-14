@@ -1,11 +1,20 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 
 from rich.console import Console
 from rich.table import Table
 
-from meeting_summarizer.models import CleanTranscript, FocusAreaReview, MeetingSummary, ProjectConfig, TranscriptSegment
+from meeting_summarizer.models import (
+    ActionItem,
+    CleanTranscript,
+    FocusAreaReview,
+    MeetingSummary,
+    ProjectConfig,
+    TalkPoint,
+    TranscriptSegment,
+)
 
 
 def derive_output_path(transcript_path: str | Path, suffix: str, output_dir: str | Path | None = None) -> Path:
@@ -100,6 +109,114 @@ def render_summary_markdown(summary: MeetingSummary) -> str:
             lines.extend(f'- "{quote}"' for quote in talk.quotes)
         lines.append("")
     return "\n".join(lines).strip() + "\n"
+
+
+def parse_summary_markdown(content: str) -> MeetingSummary:
+    lines = content.splitlines()
+    if not lines or lines[0].strip() != "# Meeting Summary":
+        raise ValueError("Meeting summary markdown must start with '# Meeting Summary'.")
+
+    section = "paragraph"
+    paragraph_lines: list[str] = []
+    themes: list[str] = []
+    action_items: list[ActionItem] = []
+    resources: list[str] = []
+    talk_points: list[TalkPoint] = []
+    current_talk: TalkPoint | None = None
+    talk_subsection: str | None = None
+
+    action_item_pattern = re.compile(r'^- (?P<mentioner>.*?): (?P<description>.*?)(?: Quote: "(?P<quote>.*)")?$')
+
+    def normalize_bullets(items: list[str]) -> list[str]:
+        return [] if items == ["None noted."] else items
+
+    def flush_talk() -> None:
+        nonlocal current_talk
+        if current_talk is None:
+            return
+        current_talk.salient_points = normalize_bullets(current_talk.salient_points)
+        current_talk.questions = normalize_bullets(current_talk.questions)
+        current_talk.quotes = normalize_bullets(current_talk.quotes)
+        talk_points.append(current_talk)
+        current_talk = None
+
+    for line in lines[1:]:
+        stripped = line.strip()
+        if stripped == "## Themes":
+            flush_talk()
+            section = "themes"
+            continue
+        if stripped == "## Action Items":
+            flush_talk()
+            section = "action_items"
+            continue
+        if stripped == "## External Resources":
+            flush_talk()
+            section = "resources"
+            continue
+        if stripped == "## Talk Highlights":
+            flush_talk()
+            section = "talk_highlights"
+            continue
+        if line.startswith("### "):
+            flush_talk()
+            current_talk = TalkPoint(speaker=line[4:].strip(), salient_points=[], questions=[], quotes=[])
+            talk_subsection = None
+            continue
+        if stripped == "Salient points:":
+            talk_subsection = "salient_points"
+            continue
+        if stripped == "Questions:":
+            talk_subsection = "questions"
+            continue
+        if stripped == "Quotes:":
+            talk_subsection = "quotes"
+            continue
+        if not stripped:
+            continue
+
+        if section == "paragraph":
+            paragraph_lines.append(line)
+            continue
+        if section == "themes" and line.startswith("- "):
+            themes.append(line[2:])
+            continue
+        if section == "action_items" and line.startswith("- "):
+            if line == "- None noted.":
+                continue
+            match = action_item_pattern.match(line)
+            if match is None:
+                raise ValueError("Action item markdown is not in the expected format.")
+            action_items.append(
+                ActionItem(
+                    mentioner=match.group("mentioner"),
+                    description=match.group("description"),
+                    quote=match.group("quote"),
+                )
+            )
+            continue
+        if section == "resources" and line.startswith("- "):
+            resources.append(line[2:])
+            continue
+        if section == "talk_highlights" and current_talk is not None:
+            if talk_subsection == "salient_points" and line.startswith("- "):
+                current_talk.salient_points.append(line[2:])
+                continue
+            if talk_subsection == "questions" and line.startswith("- "):
+                current_talk.questions.append(line[2:])
+                continue
+            if talk_subsection == "quotes" and line.startswith('- "') and line.endswith('"'):
+                current_talk.quotes.append(line[3:-1])
+                continue
+
+    flush_talk()
+    return MeetingSummary(
+        paragraph="\n".join(paragraph_lines).strip(),
+        themes=normalize_bullets(themes),
+        action_items=action_items,
+        resources=normalize_bullets(resources),
+        talk_points=talk_points,
+    )
 
 
 def render_focus_area_markdown(reviews: list[FocusAreaReview]) -> str:

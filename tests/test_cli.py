@@ -174,6 +174,45 @@ def test_summarize_reuses_existing_cleaned_markdown(workspace_tmp_path, monkeypa
     assert "Existing cleaned text." in (workspace_tmp_path / "meeting.summary.md").read_text(encoding="utf-8")
 
 
+def test_summarize_reuses_existing_summary_markdown(workspace_tmp_path, monkeypatch) -> None:
+    transcript_path = workspace_tmp_path / "meeting.vtt"
+    transcript_path.write_text(
+        "WEBVTT\n\n00:00:01.000 --> 00:00:03.000\nAlice: Hi.\n",
+        encoding="utf-8",
+    )
+    (workspace_tmp_path / "meeting.cleaned.md").write_text(
+        "# Cleaned Transcript\n\n## Alice (00:00:01)\n\nExisting cleaned text.\n",
+        encoding="utf-8",
+    )
+    summary_path = workspace_tmp_path / "meeting.summary.md"
+    summary_path.write_text(
+        "# Meeting Summary\n\nExisting summary paragraph.\n\n## Themes\n\n- tracking\n\n## Action Items\n\n- None noted.\n\n## External Resources\n\n- None noted.\n\n## Talk Highlights\n\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(cli, "_make_client", lambda api_key: FakeClient())
+
+    def fail_summarize_meeting(*args, **kwargs):
+        raise AssertionError("summarize_meeting should not be called when summary markdown exists")
+
+    monkeypatch.setattr(cli, "summarize_meeting", fail_summarize_meeting)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli.app,
+        [
+            "transcript",
+            "summarize",
+            str(transcript_path),
+            "--api-key",
+            "secret",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "Existing summary paragraph." in summary_path.read_text(encoding="utf-8")
+
+
 def test_summarize_cleans_when_cleaned_markdown_missing(workspace_tmp_path, monkeypatch) -> None:
     transcript_path = workspace_tmp_path / "meeting.vtt"
     transcript_path.write_text(
@@ -229,6 +268,10 @@ def test_cross_reference_reuses_existing_cleaned_markdown(workspace_tmp_path, mo
         "# Cleaned Transcript\n\n## Alice (00:00:01)\n\nExisting cleaned text.\n",
         encoding="utf-8",
     )
+    (workspace_tmp_path / "meeting.summary.md").write_text(
+        "# Meeting Summary\n\nExisting summary paragraph.\n\n## Themes\n\n- tracking\n\n## Action Items\n\n- None noted.\n\n## External Resources\n\n- None noted.\n\n## Talk Highlights\n\n",
+        encoding="utf-8",
+    )
     project_path = workspace_tmp_path / "project.yaml"
     project_path.write_text(
         "name: Committee\nfocus_areas:\n  - id: tracking\n    title: Tracking\n    description: desc\n",
@@ -241,24 +284,17 @@ def test_cross_reference_reuses_existing_cleaned_markdown(workspace_tmp_path, mo
         raise AssertionError("clean_transcript should not be called when cleaned markdown exists")
 
     monkeypatch.setattr(cli, "clean_transcript", fail_clean_transcript)
-    monkeypatch.setattr(
-        cli,
-        "summarize_meeting",
-        lambda cleaned, client, model: MeetingSummary(
-            paragraph=cleaned.segments[0].text,
-            themes=[],
-            action_items=[],
-            resources=[],
-            talk_points=[],
-        ),
-    )
+    def fail_summarize_meeting(*args, **kwargs):
+        raise AssertionError("summarize_meeting should not be called when summary markdown exists")
+
+    monkeypatch.setattr(cli, "summarize_meeting", fail_summarize_meeting)
     monkeypatch.setattr(
         cli,
         "cross_reference_focus_areas",
         lambda summary, cleaned, project, client, model: [
             FocusAreaReview(
                 focus_area=FocusArea(id="tracking", title="Tracking", description="desc"),
-                relevant_points=[cleaned.segments[0].text],
+                relevant_points=[summary.paragraph, cleaned.segments[0].text],
                 outstanding_questions=[],
                 action_items=[],
                 quotes=[],
@@ -282,8 +318,9 @@ def test_cross_reference_reuses_existing_cleaned_markdown(workspace_tmp_path, mo
     )
 
     assert result.exit_code == 0
-    assert "Existing cleaned text." in (workspace_tmp_path / "meeting.summary.md").read_text(encoding="utf-8")
+    assert "Existing summary paragraph." in (workspace_tmp_path / "meeting.summary.md").read_text(encoding="utf-8")
     assert "Existing cleaned text." in (workspace_tmp_path / "meeting.focus-areas.md").read_text(encoding="utf-8")
+    assert "Existing summary paragraph." in (workspace_tmp_path / "meeting.focus-areas.md").read_text(encoding="utf-8")
 
 
 def test_analysis_reuses_existing_cleaned_markdown(workspace_tmp_path, monkeypatch) -> None:
@@ -295,6 +332,10 @@ def test_analysis_reuses_existing_cleaned_markdown(workspace_tmp_path, monkeypat
     cleaned_path = workspace_tmp_path / "meeting.cleaned.md"
     cleaned_path.write_text(
         "# Cleaned Transcript\n\n## Alice (00:00:01)\n\nExisting cleaned text.\n",
+        encoding="utf-8",
+    )
+    (workspace_tmp_path / "meeting.summary.md").write_text(
+        "# Meeting Summary\n\nExisting summary paragraph.\n\n## Themes\n\n- tracking\n\n## Action Items\n\n- None noted.\n\n## External Resources\n\n- None noted.\n\n## Talk Highlights\n\n",
         encoding="utf-8",
     )
     project_path = workspace_tmp_path / "project.yaml"
@@ -309,24 +350,17 @@ def test_analysis_reuses_existing_cleaned_markdown(workspace_tmp_path, monkeypat
         raise AssertionError("clean_transcript should not be called when cleaned markdown exists")
 
     monkeypatch.setattr(cli, "clean_transcript", fail_clean_transcript)
-    monkeypatch.setattr(
-        cli,
-        "summarize_meeting",
-        lambda cleaned, client, model: MeetingSummary(
-            paragraph=cleaned.segments[0].text,
-            themes=[],
-            action_items=[],
-            resources=[],
-            talk_points=[],
-        ),
-    )
+    def fail_summarize_meeting(*args, **kwargs):
+        raise AssertionError("summarize_meeting should not be called when summary markdown exists")
+
+    monkeypatch.setattr(cli, "summarize_meeting", fail_summarize_meeting)
     monkeypatch.setattr(
         cli,
         "cross_reference_focus_areas",
         lambda summary, cleaned, project, client, model: [
             FocusAreaReview(
                 focus_area=FocusArea(id="tracking", title="Tracking", description="desc"),
-                relevant_points=[cleaned.segments[0].text],
+                relevant_points=[summary.paragraph, cleaned.segments[0].text],
                 outstanding_questions=[],
                 action_items=[],
                 quotes=[],
@@ -350,5 +384,6 @@ def test_analysis_reuses_existing_cleaned_markdown(workspace_tmp_path, monkeypat
     )
 
     assert result.exit_code == 0
-    assert "Existing cleaned text." in (workspace_tmp_path / "meeting.summary.md").read_text(encoding="utf-8")
+    assert "Existing summary paragraph." in (workspace_tmp_path / "meeting.summary.md").read_text(encoding="utf-8")
     assert "Existing cleaned text." in (workspace_tmp_path / "meeting.focus-areas.md").read_text(encoding="utf-8")
+    assert "Existing summary paragraph." in (workspace_tmp_path / "meeting.focus-areas.md").read_text(encoding="utf-8")
