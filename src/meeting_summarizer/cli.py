@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Annotated
 
@@ -15,10 +16,12 @@ from meeting_summarizer.config import (
     store_api_key,
 )
 from meeting_summarizer.logging_config import configure_logging
+from meeting_summarizer.models import CleanTranscript
 from meeting_summarizer.openai_client import OpenAIClient
 from meeting_summarizer.project import add_focus_area, init_project, load_project
 from meeting_summarizer.render import (
     derive_output_path,
+    parse_cleaned_markdown,
     render_cleaned_markdown,
     render_focus_area_markdown,
     render_summary_markdown,
@@ -50,6 +53,8 @@ app.add_typer(
     help="Run transcript cleaning, summarization, and focus-area analysis.",
 )
 
+logger = logging.getLogger(__name__)
+
 
 @app.callback()
 def main(verbose: Annotated[int, typer.Option("-v", count=True)] = 0) -> None:
@@ -72,6 +77,25 @@ def _resolve_models(project_models: dict[str, str] | None, economy: str | None, 
         economy or models.get("economy", DEFAULT_MODEL_ECONOMY),
         judgment or models.get("judgment", DEFAULT_MODEL_JUDGMENT),
     )
+
+
+def _load_or_clean_transcript(
+    transcript_path: str,
+    output_dir: str | None,
+    client: OpenAIClient,
+    economy_model: str,
+    max_clean_chars: int,
+    overwrite: bool,
+) -> tuple[CleanTranscript, Path, bool]:
+    cleaned_path = derive_output_path(transcript_path, ".cleaned.md", output_dir)
+    if cleaned_path.exists():
+        logger.info("Reusing existing cleaned transcript at %s", cleaned_path)
+        cleaned = parse_cleaned_markdown(cleaned_path.read_text(encoding="utf-8"))
+        return cleaned, cleaned_path, True
+
+    cleaned = clean_transcript(parse_transcript(transcript_path), client, economy_model, max_clean_chars)
+    _write_markdown(cleaned_path, render_cleaned_markdown(cleaned), overwrite)
+    return cleaned, cleaned_path, False
 
 
 @project_app.command(
@@ -154,11 +178,11 @@ def transcript_summarize(
 ) -> None:
     client = _make_client(api_key)
     economy_model, judgment_model = _resolve_models(None, model_economy, model_judgment)
-    cleaned = clean_transcript(parse_transcript(transcript_path), client, economy_model, max_clean_chars)
+    cleaned, _, _ = _load_or_clean_transcript(
+        transcript_path, output_dir, client, economy_model, max_clean_chars, overwrite
+    )
     summary = summarize_meeting(cleaned, client, judgment_model)
-    cleaned_path = derive_output_path(transcript_path, ".cleaned.md", output_dir)
     summary_path = derive_output_path(transcript_path, ".summary.md", output_dir)
-    _write_markdown(cleaned_path, render_cleaned_markdown(cleaned), overwrite)
     _write_markdown(summary_path, render_summary_markdown(summary), overwrite)
     typer.echo(str(summary_path))
 
@@ -181,13 +205,13 @@ def transcript_cross_reference(
     project_config = load_project(project)
     client = _make_client(api_key)
     economy_model, judgment_model = _resolve_models(project_config.models, model_economy, model_judgment)
-    cleaned = clean_transcript(parse_transcript(transcript_path), client, economy_model, max_clean_chars)
+    cleaned, _, _ = _load_or_clean_transcript(
+        transcript_path, output_dir, client, economy_model, max_clean_chars, overwrite
+    )
     summary = summarize_meeting(cleaned, client, judgment_model)
     reviews = cross_reference_focus_areas(summary, cleaned, project_config, client, economy_model)
-    cleaned_path = derive_output_path(transcript_path, ".cleaned.md", output_dir)
     summary_path = derive_output_path(transcript_path, ".summary.md", output_dir)
     focus_path = derive_output_path(transcript_path, ".focus-areas.md", output_dir)
-    _write_markdown(cleaned_path, render_cleaned_markdown(cleaned), overwrite)
     _write_markdown(summary_path, render_summary_markdown(summary), overwrite)
     _write_markdown(focus_path, render_focus_area_markdown(reviews), overwrite)
     typer.echo(str(focus_path))
@@ -211,14 +235,17 @@ def transcript_analysis(
     project_config = load_project(project)
     client = _make_client(api_key)
     economy_model, judgment_model = _resolve_models(project_config.models, model_economy, model_judgment)
-    cleaned = clean_transcript(parse_transcript(transcript_path), client, economy_model, max_clean_chars)
+    cleaned, cleaned_path, reused_cleaned = _load_or_clean_transcript(
+        transcript_path, output_dir, client, economy_model, max_clean_chars, overwrite
+    )
     summary = summarize_meeting(cleaned, client, judgment_model)
     reviews = cross_reference_focus_areas(summary, cleaned, project_config, client, economy_model)
     outputs = {
-        derive_output_path(transcript_path, ".cleaned.md", output_dir): render_cleaned_markdown(cleaned),
         derive_output_path(transcript_path, ".summary.md", output_dir): render_summary_markdown(summary),
         derive_output_path(transcript_path, ".focus-areas.md", output_dir): render_focus_area_markdown(reviews),
     }
+    if not reused_cleaned:
+        outputs[cleaned_path] = render_cleaned_markdown(cleaned)
     for output_path, content in outputs.items():
         _write_markdown(output_path, content, overwrite)
     for output_path in outputs:

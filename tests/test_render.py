@@ -1,7 +1,13 @@
 from __future__ import annotations
 
 from meeting_summarizer.models import ActionItem, CleanTranscript, FocusArea, FocusAreaReview, MeetingSummary, TalkPoint, TranscriptSegment
-from meeting_summarizer.render import derive_output_path, render_cleaned_markdown, render_focus_area_markdown, render_summary_markdown
+from meeting_summarizer.render import (
+    derive_output_path,
+    parse_cleaned_markdown,
+    render_cleaned_markdown,
+    render_focus_area_markdown,
+    render_summary_markdown,
+)
 
 
 def test_derive_output_path_uses_sibling_file(workspace_tmp_path) -> None:
@@ -29,3 +35,16 @@ def test_render_markdown_outputs() -> None:
     assert "# Cleaned Transcript" in render_cleaned_markdown(cleaned)
     assert "# Meeting Summary" in render_summary_markdown(summary)
     assert "# Focus Area Cross Reference" in render_focus_area_markdown([review])
+
+
+def test_parse_cleaned_markdown_round_trips_segments() -> None:
+    cleaned = CleanTranscript(
+        segments=[
+            TranscriptSegment(speaker="Alice", text="Started meeting.", start_time="00:00:01"),
+            TranscriptSegment(speaker="Bob", text="Asked a question.\nSecond line."),
+        ]
+    )
+
+    parsed = parse_cleaned_markdown(render_cleaned_markdown(cleaned))
+
+    assert parsed == cleaned
