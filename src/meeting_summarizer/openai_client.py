@@ -25,12 +25,25 @@ class OpenAIClient:
         self._client = OpenAI(api_key=api_key)
 
     def generate_json(self, *, model: str, instructions: str, input_text: str) -> dict[str, Any]:
+        if not input_text.strip():
+            raise ValueError("OpenAI input_text cannot be empty.")
         LOGGER.debug("Calling OpenAI model=%s", model)
         response = self._client.responses.create(
             model=model,
             instructions=instructions,
-            input=input_text,
+            input=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": f"Respond with JSON only.\n\n{input_text}",
+                        }
+                    ],
+                }
+            ],
             text={"format": {"type": "json_object"}},
+            reasoning={"effort": "minimal"},
         )
         output_text = getattr(response, "output_text", None)
         if not output_text:

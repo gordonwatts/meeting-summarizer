@@ -19,11 +19,15 @@ dependencies = [
   "typer>=0.15.1",
 ]
 
+[project.optional-dependencies]
+dev = [
+  "black>=25.1.0",
+  "flake8>=7.1.2",
+  "pytest>=8.3.5",
+]
+
 [project.scripts]
 meeting-summarizer = "meeting_summarizer.cli:app"
-
-[dependency-groups]
-dev = ["pytest>=8.3.5"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/meeting_summarizer"]

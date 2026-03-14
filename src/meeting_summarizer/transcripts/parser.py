@@ -15,6 +15,7 @@ VTT_SPEAKER_RE = re.compile(r"^(?P<speaker>[^:]+):\s*(?P<text>.+)$")
 TXT_LINE_RE = re.compile(
     r"^(?P<time>\d{1,2}:\d{2}:\d{2})(?:\s+)?(?P<speaker>[^:]+):\s*(?P<text>.+)$"
 )
+ZOOM_BLOCK_HEADER_RE = re.compile(r"^\[(?P<speaker>.+?)\]\s+(?P<time>\d{1,2}:\d{2}:\d{2})$")
 
 
 def parse_transcript(path: str | Path) -> list[TranscriptSegment]:
@@ -59,6 +60,9 @@ def _parse_vtt(raw_text: str) -> list[TranscriptSegment]:
 
 
 def _parse_zoom_text(raw_text: str) -> list[TranscriptSegment]:
+    if segments := _parse_zoom_text_blocks(raw_text):
+        return segments
+
     segments: list[TranscriptSegment] = []
     for line in raw_text.splitlines():
         stripped = line.strip()
@@ -78,6 +82,28 @@ def _parse_zoom_text(raw_text: str) -> list[TranscriptSegment]:
         if segments:
             segments[-1].text = f"{segments[-1].text} {stripped}".strip()
             segments[-1].source_lineage.append(stripped)
+    return segments
+
+
+def _parse_zoom_text_blocks(raw_text: str) -> list[TranscriptSegment]:
+    segments: list[TranscriptSegment] = []
+    blocks = [block.strip() for block in re.split(r"\r?\n\s*\r?\n", raw_text) if block.strip()]
+    for block in blocks:
+        lines = [line.strip() for line in block.splitlines() if line.strip()]
+        if len(lines) < 2:
+            continue
+        match = ZOOM_BLOCK_HEADER_RE.match(lines[0])
+        if not match:
+            continue
+        text_lines = lines[1:]
+        segments.append(
+            TranscriptSegment(
+                speaker=match.group("speaker").strip(),
+                text=" ".join(text_lines).strip(),
+                start_time=match.group("time"),
+                source_lineage=lines,
+            )
+        )
     return segments
 
 

@@ -22,3 +22,21 @@ def test_parse_txt_appends_continuation_lines(workspace_tmp_path) -> None:
     segments = parse_transcript(path)
     assert len(segments) == 2
     assert "continued thought" in segments[0].text
+
+
+def test_parse_zoom_txt_blocks(workspace_tmp_path) -> None:
+    path = workspace_tmp_path / "meeting.txt"
+    path.write_text(
+        "[Alice] 00:00:01\n"
+        "First line.\n"
+        "\n"
+        "[Bob] 00:00:04\n"
+        "Reply line one.\n"
+        "Reply line two.\n",
+        encoding="utf-8",
+    )
+    segments = parse_transcript(path)
+    assert len(segments) == 2
+    assert segments[0].speaker == "Alice"
+    assert segments[0].start_time == "00:00:01"
+    assert segments[1].text == "Reply line one. Reply line two."
