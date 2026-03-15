@@ -16,7 +16,11 @@ from meeting_summarizer.models import (
 
 def test_transcript_to_text_includes_timestamps() -> None:
     text = transcript_to_text(
-        [TranscriptSegment(speaker="Alice", text="Cleaned text.", start_time="00:00:01")]
+        [
+            TranscriptSegment(
+                speaker="Alice", text="Cleaned text.", start_time="00:00:01"
+            )
+        ]
     )
     assert text == "Alice [00:00:01]: Cleaned text."
 

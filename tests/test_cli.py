@@ -14,7 +14,6 @@ from meeting_summarizer.models import (
     TranscriptSegment,
 )
 
-
 SUMMARY_MARKDOWN = (
     "# Meeting Summary\n\n"
     "Existing summary paragraph.\n\n"
@@ -63,7 +62,9 @@ class FakeService:
         return self.summary_result
 
     def cross_reference_focus_areas(self, transcript_path: str, **kwargs):
-        self.cross_reference_calls.append({"transcript_path": transcript_path, **kwargs})
+        self.cross_reference_calls.append(
+            {"transcript_path": transcript_path, **kwargs}
+        )
         if self.cross_reference_result is None:
             raise AssertionError("cross_reference_focus_areas should not be called")
         return self.cross_reference_result
@@ -75,9 +76,7 @@ class FakeService:
 
 def make_cleaned(text: str) -> CleanTranscript:
     return CleanTranscript(
-        segments=[
-            TranscriptSegment(speaker="Alice", text=text, start_time="00:00:01")
-        ]
+        segments=[TranscriptSegment(speaker="Alice", text=text, start_time="00:00:01")]
     )
 
 
@@ -148,7 +147,11 @@ def test_clean_command_passes_max_clean_chars(workspace_tmp_path, monkeypatch) -
     )
 
     service = FakeService(
-        clean_result=(make_cleaned("Cleaned sentence."), workspace_tmp_path / "meeting.cleaned.md", False)
+        clean_result=(
+            make_cleaned("Cleaned sentence."),
+            workspace_tmp_path / "meeting.cleaned.md",
+            False,
+        )
     )
     monkeypatch.setattr(cli, "_make_service", lambda api_key: service)
 
@@ -238,7 +241,9 @@ def test_summarize_reuses_existing_cleaned_markdown(
 
     assert result.exit_code == 0
     assert service.clean_calls[0]["overwrite"] is False
-    assert service.summary_calls[0]["cleaned"].segments[0].text == "Existing cleaned text."
+    assert (
+        service.summary_calls[0]["cleaned"].segments[0].text == "Existing cleaned text."
+    )
 
 
 def test_summarize_fails_when_existing_summary_markdown(
@@ -366,8 +371,14 @@ def test_cross_reference_reuses_existing_cleaned_markdown(
     )
 
     assert result.exit_code == 0
-    assert service.cross_reference_calls[0]["summary"].paragraph == "Existing summary paragraph."
-    assert service.cross_reference_calls[0]["cleaned"].segments[0].text == "Existing cleaned text."
+    assert (
+        service.cross_reference_calls[0]["summary"].paragraph
+        == "Existing summary paragraph."
+    )
+    assert (
+        service.cross_reference_calls[0]["cleaned"].segments[0].text
+        == "Existing cleaned text."
+    )
 
 
 def test_cross_reference_fails_when_existing_focus_output_before_creating_client(

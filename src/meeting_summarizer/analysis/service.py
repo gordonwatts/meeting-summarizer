@@ -63,7 +63,9 @@ class TranscriptAnalysisService:
         return TranscriptOutputSet(
             cleaned_path=derive_output_path(transcript_path, ".cleaned.md", output_dir),
             summary_path=derive_output_path(transcript_path, ".summary.md", output_dir),
-            focus_path=derive_output_path(transcript_path, ".focus-areas.md", output_dir),
+            focus_path=derive_output_path(
+                transcript_path, ".focus-areas.md", output_dir
+            ),
         )
 
     def clean_transcript(
@@ -244,7 +246,9 @@ class TranscriptAnalysisService:
     def ensure_output_writable(output_path: Path, overwrite: bool) -> None:
         """Validate that an output path may be written."""
         if output_path.exists() and not overwrite:
-            raise ValueError(f"{output_path} already exists. Use --overwrite to replace it.")
+            raise ValueError(
+                f"{output_path} already exists. Use --overwrite to replace it."
+            )
 
     @staticmethod
     def all_outputs_exist(output_paths: list[Path]) -> bool:

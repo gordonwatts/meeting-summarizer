@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
-
 from meeting_summarizer.analysis import service
 from meeting_summarizer.analysis.service import TranscriptAnalysisService
 from meeting_summarizer.models import (
@@ -9,7 +7,6 @@ from meeting_summarizer.models import (
     FocusArea,
     FocusAreaReview,
     MeetingSummary,
-    ProjectConfig,
     TranscriptSegment,
 )
 
@@ -62,7 +59,9 @@ def test_cross_reference_writes_output(workspace_tmp_path, monkeypatch) -> None:
         "cross_reference_focus_areas",
         lambda summary, cleaned, project, client, model: [
             FocusAreaReview(
-                focus_area=FocusArea(id="tracking", title="Tracking", description="desc"),
+                focus_area=FocusArea(
+                    id="tracking", title="Tracking", description="desc"
+                ),
                 relevant_points=["point"],
                 outstanding_questions=[],
                 action_items=[],

@@ -15,6 +15,7 @@ from meeting_summarizer.models import (
     TalkPoint,
     TranscriptSegment,
 )
+
 if TYPE_CHECKING:
     from meeting_summarizer.openai_client import OpenAIClient
 
@@ -118,7 +119,9 @@ def _coerce_resource(value: Any) -> ExternalResource:
     """Normalize a model-produced resource into the resource schema."""
     if isinstance(value, dict):
         return ExternalResource(
-            name=_coerce_text(value.get("name") or value.get("title") or value.get("resource"))
+            name=_coerce_text(
+                value.get("name") or value.get("title") or value.get("resource")
+            )
             or "Unnamed resource",
             resource_type=_coerce_string_field(
                 value.get("type") or value.get("resource_type")

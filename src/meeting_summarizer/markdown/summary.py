@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from meeting_summarizer.markdown.common import parse_markdown_table, render_markdown_table
+from meeting_summarizer.markdown.common import (
+    parse_markdown_table,
+    render_markdown_table,
+)
 from meeting_summarizer.models import (
     ActionItem,
     ExternalResource,

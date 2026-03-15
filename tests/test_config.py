@@ -29,8 +29,7 @@ def test_store_api_key_preserves_existing_env_entries(workspace_tmp_path) -> Non
 
     assert written_path == env_path
     assert env_path.read_text(encoding="utf-8") == (
-        "EXISTING_TOKEN=keep-me\n"
-        f"{config.API_KEY_ENV_VAR}=new-secret\n"
+        "EXISTING_TOKEN=keep-me\n" f"{config.API_KEY_ENV_VAR}=new-secret\n"
     )
     assert config.resolve_api_key(env_path=env_path) == "new-secret"
 

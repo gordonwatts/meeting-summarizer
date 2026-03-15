@@ -59,7 +59,9 @@ def _validate_focus_areas(data: Any) -> list[FocusArea]:
     for index, item in enumerate(data):
         area_data = _require_mapping(item, context=f"focus_areas[{index}]")
         area = FocusArea(
-            id=_require_string(area_data.get("id"), field_name=f"focus_areas[{index}].id"),
+            id=_require_string(
+                area_data.get("id"), field_name=f"focus_areas[{index}].id"
+            ),
             title=_require_string(
                 area_data.get("title"), field_name=f"focus_areas[{index}].title"
             ),
