@@ -4,6 +4,14 @@ from meeting_summarizer.models import FocusAreaReview
 
 
 def render_focus_area_markdown(reviews: list[FocusAreaReview]) -> str:
+    """Render focus-area reviews as markdown.
+
+    Args:
+        reviews: Focus-area reviews to serialize.
+
+    Returns:
+        Markdown content for the focus-area report.
+    """
     lines = ["# Focus Area Cross Reference", ""]
     for review in reviews:
         lines.extend(

@@ -11,6 +11,14 @@ from meeting_summarizer.models import (
 
 
 def render_summary_markdown(summary: MeetingSummary) -> str:
+    """Render a meeting summary as markdown.
+
+    Args:
+        summary: Structured meeting summary to serialize.
+
+    Returns:
+        Markdown content for the meeting summary.
+    """
     lines = ["# Meeting Summary", "", summary.paragraph, "", "## Themes", ""]
     theme_rows = [[theme.title, "; ".join(theme.details)] for theme in summary.themes]
     lines.extend(render_markdown_table(["Theme", "Details"], theme_rows))
@@ -40,6 +48,14 @@ def render_summary_markdown(summary: MeetingSummary) -> str:
 
 
 def parse_summary_markdown(content: str) -> MeetingSummary:
+    """Parse meeting summary markdown back into the domain model.
+
+    Args:
+        content: Markdown content to parse.
+
+    Returns:
+        The parsed meeting summary.
+    """
     lines = content.splitlines()
     if not lines or lines[0].strip() != "# Meeting Summary":
         raise ValueError(
@@ -56,9 +72,11 @@ def parse_summary_markdown(content: str) -> MeetingSummary:
     talk_subsection: str | None = None
 
     def normalize_bullets(items: list[str]) -> list[str]:
+        """Collapse placeholder bullets into an empty list."""
         return [] if items == ["None noted."] else items
 
     def flush_talk() -> None:
+        """Append the current talk-point buffer to the parsed result."""
         nonlocal current_talk
         if current_talk is None:
             return

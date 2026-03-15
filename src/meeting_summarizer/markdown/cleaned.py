@@ -4,6 +4,14 @@ from meeting_summarizer.models import CleanTranscript, TranscriptSegment
 
 
 def render_cleaned_markdown(cleaned: CleanTranscript) -> str:
+    """Render a cleaned transcript as markdown.
+
+    Args:
+        cleaned: Cleaned transcript to serialize.
+
+    Returns:
+        Markdown content for the cleaned transcript.
+    """
     lines = ["# Cleaned Transcript", ""]
     for segment in cleaned.segments:
         heading = f"## {segment.speaker}"
@@ -14,6 +22,14 @@ def render_cleaned_markdown(cleaned: CleanTranscript) -> str:
 
 
 def parse_cleaned_markdown(content: str) -> CleanTranscript:
+    """Parse cleaned transcript markdown back into the domain model.
+
+    Args:
+        content: Markdown content to parse.
+
+    Returns:
+        The parsed cleaned transcript.
+    """
     lines = content.splitlines()
     if not lines or lines[0].strip() != "# Cleaned Transcript":
         raise ValueError(
@@ -26,6 +42,7 @@ def parse_cleaned_markdown(content: str) -> CleanTranscript:
     current_text_lines: list[str] = []
 
     def flush_segment() -> None:
+        """Append the current buffered segment to the parsed result."""
         nonlocal current_speaker, current_start_time, current_text_lines
         if current_speaker is None:
             return

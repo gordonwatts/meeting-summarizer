@@ -54,20 +54,24 @@ logger = logging.getLogger(__name__)
 
 @app.callback()
 def main(verbose: Annotated[int, typer.Option("-v", count=True)] = 0) -> None:
+    """Configure global logging before dispatching CLI commands."""
     configure_logging(verbose)
 
 
 def _make_client(api_key: str | None) -> OpenAIClient:
+    """Create the shared OpenAI client for CLI commands."""
     return OpenAIClient(api_key=resolve_api_key(api_key))
 
 
 def _make_service(api_key: str | None) -> TranscriptAnalysisService:
+    """Create the transcript analysis service for CLI commands."""
     return TranscriptAnalysisService(_make_client(api_key))
 
 
 def _resolve_models(
     project_models: dict[str, str] | None, economy: str | None, judgment: str | None
 ) -> tuple[str, str]:
+    """Resolve model names from CLI overrides and project defaults."""
     models = project_models or {}
     return (
         economy or models.get("economy", DEFAULT_MODEL_ECONOMY),
@@ -81,6 +85,15 @@ def _resolve_models(
     short_help="Create a project YAML file.",
 )
 def project_init(path: str, name: str = typer.Option(..., "--name")) -> None:
+    """Create a new project YAML file from the CLI.
+
+    Args:
+        path: Output path for the project file.
+        name: Human-readable project name.
+
+    Returns:
+        None.
+    """
     project = init_project(path, name)
     logger.info(f"Initialized project at {project.path}")
 
@@ -96,6 +109,17 @@ def project_add_focus_area(
     description: str = typer.Option(..., "--description"),
     notes: str | None = typer.Option(None, "--notes"),
 ) -> None:
+    """Add a focus area to an existing project file.
+
+    Args:
+        path: Project file to update.
+        title: Focus-area title.
+        description: Focus-area description.
+        notes: Optional extra notes for the focus area.
+
+    Returns:
+        None.
+    """
     try:
         area = add_focus_area(path, title, description, notes)
     except ValueError as exc:
@@ -109,6 +133,14 @@ def project_add_focus_area(
     short_help="Show the project configuration.",
 )
 def project_show(path: str) -> None:
+    """Display a project configuration in the terminal.
+
+    Args:
+        path: Project file to load.
+
+    Returns:
+        None.
+    """
     try:
         project = load_project(path)
     except ValueError as exc:
@@ -122,6 +154,14 @@ def project_show(path: str) -> None:
     short_help="Store the API key.",
 )
 def auth_api_key(api_key: str = typer.Option(..., "--api-key")) -> None:
+    """Store the API key through the CLI.
+
+    Args:
+        api_key: API key value to persist.
+
+    Returns:
+        None.
+    """
     logger.info(f"Stored API key in {store_api_key(api_key)}")
 
 
@@ -145,6 +185,19 @@ def transcript_clean(
         DEFAULT_MAX_CLEAN_CHARS, "--max-clean-chars", min=1
     ),
 ) -> None:
+    """Clean a transcript and write the cleaned markdown artifact.
+
+    Args:
+        transcript_path: Source transcript path.
+        api_key: Optional API key override.
+        output_dir: Optional output directory override.
+        overwrite: Whether existing output may be replaced.
+        model_economy: Optional cleaning model override.
+        max_clean_chars: Maximum rendered size for each cleaning chunk.
+
+    Returns:
+        None.
+    """
     output_path = derive_output_path(transcript_path, ".cleaned.md", output_dir)
     service = _make_service(api_key)
     _guard_writable_output(output_path, overwrite)
@@ -185,6 +238,20 @@ def transcript_summarize(
         DEFAULT_MAX_CLEAN_CHARS, "--max-clean-chars", min=1
     ),
 ) -> None:
+    """Clean and summarize a transcript from the CLI.
+
+    Args:
+        transcript_path: Source transcript path.
+        api_key: Optional API key override.
+        output_dir: Optional output directory override.
+        overwrite: Whether existing output may be replaced.
+        model_economy: Optional cleaning model override.
+        model_judgment: Optional summarization model override.
+        max_clean_chars: Maximum rendered size for each cleaning chunk.
+
+    Returns:
+        None.
+    """
     summary_path = derive_output_path(transcript_path, ".summary.md", output_dir)
     service = _make_service(api_key)
     _guard_writable_output(summary_path, overwrite)
@@ -233,6 +300,21 @@ def transcript_cross_reference(
         DEFAULT_MAX_CLEAN_CHARS, "--max-clean-chars", min=1
     ),
 ) -> None:
+    """Run focus-area cross-reference analysis from the CLI.
+
+    Args:
+        transcript_path: Source transcript path.
+        project: Project configuration path.
+        api_key: Optional API key override.
+        output_dir: Optional output directory override.
+        overwrite: Whether existing output may be replaced.
+        model_economy: Optional cleaning and focus-area model override.
+        model_judgment: Optional summarization model override.
+        max_clean_chars: Maximum rendered size for each cleaning chunk.
+
+    Returns:
+        None.
+    """
     try:
         project_config = load_project(project)
     except ValueError as exc:
@@ -296,6 +378,21 @@ def transcript_analysis(
         DEFAULT_MAX_CLEAN_CHARS, "--max-clean-chars", min=1
     ),
 ) -> None:
+    """Run the full transcript pipeline from the CLI.
+
+    Args:
+        transcript_path: Source transcript path.
+        project: Project configuration path.
+        api_key: Optional API key override.
+        output_dir: Optional output directory override.
+        overwrite: Whether existing output may be replaced.
+        model_economy: Optional cleaning and focus-area model override.
+        model_judgment: Optional summarization model override.
+        max_clean_chars: Maximum rendered size for each cleaning chunk.
+
+    Returns:
+        None.
+    """
     try:
         project_config = load_project(project)
     except ValueError as exc:
@@ -326,6 +423,7 @@ def transcript_analysis(
 
 
 def _guard_writable_output(output_path: Path, overwrite: bool) -> None:
+    """Translate output overwrite validation into a Typer-friendly error."""
     try:
         TranscriptAnalysisService.ensure_output_writable(output_path, overwrite)
     except ValueError as exc:

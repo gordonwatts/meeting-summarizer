@@ -14,6 +14,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 def _default_cache_dir() -> Path:
+    """Return the default on-disk cache directory for model responses."""
     return Path(__file__).resolve().parents[2] / ".cache" / "meeting-summarizer"
 
 
@@ -23,6 +24,7 @@ class OpenAIClient:
         self._cache_dir = cache_dir or _default_cache_dir()
 
     def _cache_path(self, *, model: str, instructions: str, input_text: str) -> Path:
+        """Build the cache filename for a model request payload."""
         payload = json.dumps(
             {
                 "model": model,
@@ -37,6 +39,7 @@ class OpenAIClient:
         return self._cache_dir / f"{digest}.json"
 
     def _read_cached_response(self, cache_path: Path) -> dict[str, Any] | None:
+        """Load and validate a cached JSON payload if one exists."""
         if not cache_path.exists():
             return None
         try:
@@ -59,6 +62,7 @@ class OpenAIClient:
     def _write_cached_response(
         self, cache_path: Path, *, model: str, payload: dict[str, Any]
     ) -> None:
+        """Write a cache entry atomically to avoid partial files."""
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         record = {"model": model, "payload": payload}
         with tempfile.NamedTemporaryFile(
@@ -76,6 +80,16 @@ class OpenAIClient:
     def generate_json(
         self, *, model: str, instructions: str, input_text: str
     ) -> dict[str, Any]:
+        """Request a JSON response, reusing the disk cache when available.
+
+        Args:
+            model: Model name for the request.
+            instructions: System-style instructions for the model.
+            input_text: User content for the request.
+
+        Returns:
+            The parsed JSON payload from the model response.
+        """
         if not input_text.strip():
             raise ValueError("OpenAI input_text cannot be empty.")
         cache_path = self._cache_path(

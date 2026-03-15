@@ -2,16 +2,27 @@ from __future__ import annotations
 
 
 def escape_table_cell(value: str | None) -> str:
+    """Escape a markdown table cell for safe rendering."""
     if not value:
         return ""
     return value.replace("|", "\\|").replace("\n", "<br>")
 
 
 def unescape_table_cell(value: str) -> str:
+    """Reverse markdown table escaping for parsed cell values."""
     return value.replace("<br>", "\n").replace("\\|", "|").strip()
 
 
 def render_markdown_table(headers: list[str], rows: list[list[str]]) -> list[str]:
+    """Render a simple markdown table as a list of lines.
+
+    Args:
+        headers: Table column headers.
+        rows: Table row values in header order.
+
+    Returns:
+        Markdown lines representing the table.
+    """
     lines = [
         "| " + " | ".join(headers) + " |",
         "| " + " | ".join("---" for _ in headers) + " |",
@@ -33,6 +44,15 @@ def render_markdown_table(headers: list[str], rows: list[list[str]]) -> list[str
 def parse_markdown_table(
     lines: list[str], start_index: int
 ) -> tuple[list[dict[str, str]], int]:
+    """Parse a markdown table starting at the given line index.
+
+    Args:
+        lines: Full markdown content split into lines.
+        start_index: Index of the table header line.
+
+    Returns:
+        Parsed row dictionaries and the first index after the table.
+    """
     header_line = lines[start_index].strip()
     divider_line = lines[start_index + 1].strip()
     if not (header_line.startswith("|") and divider_line.startswith("|")):

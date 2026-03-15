@@ -51,6 +51,15 @@ class TranscriptAnalysisService:
     def output_paths(
         self, transcript_path: str | Path, output_dir: str | Path | None = None
     ) -> TranscriptOutputSet:
+        """Compute the standard output paths for a transcript analysis run.
+
+        Args:
+            transcript_path: Source transcript path.
+            output_dir: Optional directory override for generated artifacts.
+
+        Returns:
+            The resolved output path set.
+        """
         return TranscriptOutputSet(
             cleaned_path=derive_output_path(transcript_path, ".cleaned.md", output_dir),
             summary_path=derive_output_path(transcript_path, ".summary.md", output_dir),
@@ -66,6 +75,18 @@ class TranscriptAnalysisService:
         max_clean_chars: int,
         overwrite: bool,
     ) -> tuple[CleanTranscript, Path, bool]:
+        """Load or generate a cleaned transcript artifact.
+
+        Args:
+            transcript_path: Source transcript path.
+            output_dir: Optional directory override for generated artifacts.
+            model: Model name for transcript cleaning.
+            max_clean_chars: Maximum rendered size for each cleaning chunk.
+            overwrite: Whether existing output may be replaced.
+
+        Returns:
+            The cleaned transcript, its output path, and whether it was reused.
+        """
         paths = self.output_paths(transcript_path, output_dir)
         if paths.cleaned_path.exists() and not overwrite:
             LOGGER.info(f"Reusing existing cleaned transcript at {paths.cleaned_path}")
@@ -94,6 +115,18 @@ class TranscriptAnalysisService:
         model: str,
         overwrite: bool,
     ) -> tuple[MeetingSummary, Path, bool]:
+        """Load or generate a meeting summary artifact.
+
+        Args:
+            transcript_path: Source transcript path.
+            output_dir: Optional directory override for generated artifacts.
+            cleaned: Cleaned transcript input.
+            model: Model name for meeting summarization.
+            overwrite: Whether existing output may be replaced.
+
+        Returns:
+            The meeting summary, its output path, and whether it was reused.
+        """
         paths = self.output_paths(transcript_path, output_dir)
         if paths.summary_path.exists() and not overwrite:
             LOGGER.info(f"Reusing existing meeting summary at {paths.summary_path}")
@@ -119,6 +152,20 @@ class TranscriptAnalysisService:
         model: str,
         overwrite: bool,
     ) -> tuple[list[FocusAreaReview], Path]:
+        """Generate the focus-area cross-reference artifact.
+
+        Args:
+            transcript_path: Source transcript path.
+            project_path: Project configuration path.
+            output_dir: Optional directory override for generated artifacts.
+            summary: Structured meeting summary.
+            cleaned: Cleaned transcript input.
+            model: Model name for focus-area analysis.
+            overwrite: Whether existing output may be replaced.
+
+        Returns:
+            The focus-area reviews and the output path written.
+        """
         project_config = load_project(project_path)
         paths = self.output_paths(transcript_path, output_dir)
         reviews = cross_reference_focus_areas(
@@ -140,6 +187,20 @@ class TranscriptAnalysisService:
         max_clean_chars: int,
         overwrite: bool,
     ) -> TranscriptRunArtifacts:
+        """Run the full transcript analysis pipeline.
+
+        Args:
+            transcript_path: Source transcript path.
+            project_path: Project configuration path.
+            output_dir: Optional directory override for generated artifacts.
+            economy_model: Model name for cleaning and focus-area analysis.
+            judgment_model: Model name for meeting summarization.
+            max_clean_chars: Maximum rendered size for each cleaning chunk.
+            overwrite: Whether existing output may be replaced.
+
+        Returns:
+            The collected analysis artifacts.
+        """
         project_config = load_project(project_path)
         paths = self.output_paths(transcript_path, output_dir)
         if not overwrite and self.all_outputs_exist(paths.as_list()):
@@ -181,6 +242,7 @@ class TranscriptAnalysisService:
 
     @staticmethod
     def ensure_output_writable(output_path: Path, overwrite: bool) -> None:
+        """Validate that an output path may be written."""
         if output_path.exists() and not overwrite:
             raise ValueError(f"{output_path} already exists. Use --overwrite to replace it.")
 
@@ -190,10 +252,12 @@ class TranscriptAnalysisService:
 
     @staticmethod
     def log_output_paths(message: str, output_paths: list[Path]) -> None:
+        """Log a message for each generated or reused output path."""
         for output_path in output_paths:
             LOGGER.info(f"{message} {output_path}")
 
     @staticmethod
     def _write_markdown(output_path: Path, content: str, overwrite: bool) -> None:
+        """Write markdown output after overwrite validation."""
         TranscriptAnalysisService.ensure_output_writable(output_path, overwrite)
         output_path.write_text(content, encoding="utf-8")

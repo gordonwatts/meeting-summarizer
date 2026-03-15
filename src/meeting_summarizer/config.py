@@ -20,6 +20,16 @@ def home_env_path() -> Path:
 def resolve_api_key(
     explicit_api_key: str | None = None, env_path: Path | None = None
 ) -> str:
+    """Resolve the OpenAI API key from CLI input, environment, or an env file.
+
+    Args:
+        explicit_api_key: API key provided directly by the caller.
+        env_path: Optional path to the env file to inspect before falling back to
+            the default home-directory env file.
+
+    Returns:
+        The resolved API key string.
+    """
     if explicit_api_key:
         return explicit_api_key
     if env_api_key := os.getenv(API_KEY_ENV_VAR):
@@ -38,6 +48,15 @@ def resolve_api_key(
 
 
 def store_api_key(api_key: str, env_path: Path | None = None) -> Path:
+    """Store the API key in the configured env file path.
+
+    Args:
+        api_key: API key value to persist.
+        env_path: Optional path to the env file to update.
+
+    Returns:
+        The path that was written.
+    """
     resolved_env_path = env_path or home_env_path()
     entries: dict[str, str] = {}
     if resolved_env_path.exists():

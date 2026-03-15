@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 
 
 def _coerce_text(value: Any) -> str:
+    """Convert loosely structured model output into a readable text string."""
     if value is None:
         return ""
     if isinstance(value, str):
@@ -80,6 +81,7 @@ def _coerce_text(value: Any) -> str:
 
 
 def _coerce_text_list(values: Any) -> list[str]:
+    """Normalize model output into a list of non-empty text strings."""
     if not isinstance(values, list):
         text = _coerce_text(values)
         return [text] if text else []
@@ -88,11 +90,13 @@ def _coerce_text_list(values: Any) -> list[str]:
 
 
 def _coerce_string_field(value: Any) -> str | None:
+    """Normalize an optional scalar field from model output."""
     text = _coerce_text(value)
     return text or None
 
 
 def _coerce_theme(value: Any) -> SummaryTheme:
+    """Normalize a model-produced theme into the summary theme schema."""
     if isinstance(value, dict):
         title = _coerce_text(
             value.get("theme")
@@ -111,6 +115,7 @@ def _coerce_theme(value: Any) -> SummaryTheme:
 
 
 def _coerce_resource(value: Any) -> ExternalResource:
+    """Normalize a model-produced resource into the resource schema."""
     if isinstance(value, dict):
         return ExternalResource(
             name=_coerce_text(value.get("name") or value.get("title") or value.get("resource"))
@@ -126,6 +131,14 @@ def _coerce_resource(value: Any) -> ExternalResource:
 
 
 def transcript_to_text(segments: list[TranscriptSegment]) -> str:
+    """Render transcript segments into the text format used in prompts.
+
+    Args:
+        segments: Transcript segments to serialize.
+
+    Returns:
+        A newline-delimited transcript string.
+    """
     lines: list[str] = []
     for segment in segments:
         prefix = segment.speaker
@@ -138,6 +151,16 @@ def transcript_to_text(segments: list[TranscriptSegment]) -> str:
 def clean_transcript_with_llm(
     client: OpenAIClient, model: str, segments: list[TranscriptSegment]
 ) -> CleanTranscript:
+    """Run the transcript cleaning stage against the shared OpenAI client.
+
+    Args:
+        client: Shared OpenAI client wrapper.
+        model: Model name for the cleaning stage.
+        segments: Transcript segments to clean.
+
+    Returns:
+        The cleaned transcript.
+    """
     payload = client.generate_json(
         model=model,
         instructions=(
@@ -168,6 +191,16 @@ def clean_transcript_with_llm(
 def summarize_meeting_with_llm(
     client: OpenAIClient, model: str, cleaned: CleanTranscript
 ) -> MeetingSummary:
+    """Run the meeting summarization stage against the shared OpenAI client.
+
+    Args:
+        client: Shared OpenAI client wrapper.
+        model: Model name for the summarization stage.
+        cleaned: Cleaned transcript content.
+
+    Returns:
+        The structured meeting summary.
+    """
     payload = client.generate_json(
         model=model,
         instructions=(
@@ -220,6 +253,18 @@ def cross_reference_with_llm(
     cleaned: CleanTranscript,
     focus_area: FocusArea,
 ) -> FocusAreaReview:
+    """Run focus-area cross-reference analysis for a single focus area.
+
+    Args:
+        client: Shared OpenAI client wrapper.
+        model: Model name for the cross-reference stage.
+        summary: Structured meeting summary.
+        cleaned: Cleaned transcript content.
+        focus_area: Focus area to review.
+
+    Returns:
+        The focus-area review.
+    """
     payload = client.generate_json(
         model=model,
         instructions=(

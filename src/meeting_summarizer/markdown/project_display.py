@@ -7,6 +7,15 @@ from meeting_summarizer.models import ProjectConfig
 
 
 def show_project(project: ProjectConfig, console: Console) -> None:
+    """Render a project configuration to a Rich console.
+
+    Args:
+        project: Project configuration to display.
+        console: Console used for rendering.
+
+    Returns:
+        None.
+    """
     console.print(f"[bold]{project.name}[/bold]")
     if project.models:
         console.print("Models:")
