@@ -110,3 +110,25 @@ def test_summary_normalizes_structured_themes_and_resources() -> None:
     ]
     assert summary.action_items[0].mentioner == "Alice"
     assert summary.resources[0].name == "Indigo"
+
+
+def test_summary_normalizes_smart_punctuation_to_ascii() -> None:
+    class SmartPunctuationClient:
+        def generate_json(self, *, model: str, instructions: str, input_text: str):
+            return {
+                "paragraph": "The study group's remit isn\u2019t changing.",
+                "themes": ["Tooling"],
+                "action_items": [],
+                "resources": [],
+                "talk_points": [],
+            }
+
+    summary = summarize_meeting_with_llm(
+        SmartPunctuationClient(),
+        "gpt-5.4",
+        CleanTranscript(
+            segments=[TranscriptSegment(speaker="Alice", text="Cleaned text.")]
+        ),
+    )
+
+    assert summary.paragraph == "The study group's remit isn't changing."

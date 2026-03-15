@@ -20,12 +20,32 @@ if TYPE_CHECKING:
     from meeting_summarizer.openai_client import OpenAIClient
 
 
+def _normalize_model_text(text: str) -> str:
+    """Normalize punctuation so persisted markdown stays plain ASCII."""
+    return (
+        text.replace("â€™", "'")
+        .replace("ā€™", "'")
+        .replace("â€˜", "'")
+        .replace("â€œ", '"')
+        .replace("â€�", '"')
+        .replace("â€“", "-")
+        .replace("â€”", "-")
+        .replace("\u2018", "'")
+        .replace("\u2019", "'")
+        .replace("\u201c", '"')
+        .replace("\u201d", '"')
+        .replace("\u2013", "-")
+        .replace("\u2014", "-")
+        .replace("\u2026", "...")
+    )
+
+
 def _coerce_text(value: Any) -> str:
     """Convert loosely structured model output into a readable text string."""
     if value is None:
         return ""
     if isinstance(value, str):
-        return value.strip()
+        return _normalize_model_text(value).strip()
     if isinstance(value, (int, float, bool)):
         return str(value)
     if isinstance(value, list):
@@ -209,15 +229,16 @@ def summarize_meeting_with_llm(
         instructions=(
             "Analyze the cleaned meeting transcript. Return JSON with keys: paragraph, themes, "
             "action_items, resources, talk_points. The paragraph must be one paragraph. Include "
-            "themes as plain-English topics with optional details, action items with mentioner, "
-            "description, and quote when available, and resources with name, type, and context when "
-            "available. For each talk point include speaker, salient_points, questions, and direct "
-            "quotes wherever possible."
+            "themes as short plain-English topic labels only, with no descriptions or nested detail "
+            "items. Deduplicate overlapping themes, action items, and resources. Include only concrete "
+            "action items with mentioner, description, and quote when available. Include resources with "
+            "name, type, and context when available. For each talk point include speaker, "
+            "salient_points, questions, and direct quotes wherever possible."
         ),
         input_text=transcript_to_text(cleaned.segments),
     )
     return MeetingSummary(
-        paragraph=payload["paragraph"],
+        paragraph=_coerce_text(payload.get("paragraph")) or "No summary provided.",
         themes=[_coerce_theme(item) for item in payload.get("themes", [])],
         action_items=[
             ActionItem(
@@ -239,10 +260,10 @@ def summarize_meeting_with_llm(
         resources=[_coerce_resource(item) for item in payload.get("resources", [])],
         talk_points=[
             TalkPoint(
-                speaker=item["speaker"],
-                salient_points=list(item.get("salient_points", [])),
-                questions=list(item.get("questions", [])),
-                quotes=list(item.get("quotes", [])),
+                speaker=_coerce_text(item.get("speaker")) or "Unknown",
+                salient_points=_coerce_text_list(item.get("salient_points", [])),
+                questions=_coerce_text_list(item.get("questions", [])),
+                quotes=_coerce_text_list(item.get("quotes", [])),
             )
             for item in payload.get("talk_points", [])
         ],
