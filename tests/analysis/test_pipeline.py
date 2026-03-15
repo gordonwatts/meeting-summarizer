@@ -57,9 +57,10 @@ class StubClient:
                 ],
             }
         return {
-            "relevant_points": ["point"],
-            "outstanding_questions": ["question"],
-            "action_items": ["Do thing"],
+            "mentioned_people": ["Alice"],
+            "relevant_points": [{"speaker": "Alice", "point": "Specific point"}],
+            "outstanding_questions": [{"speaker": "Alice", "question": "Open question"}],
+            "action_items": [{"owner": "Alice", "action": "Do thing"}],
             "quotes": ["quote"],
             "coverage_note": "Covered.",
         }

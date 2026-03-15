@@ -66,6 +66,7 @@ class FocusArea:
 @dataclass(slots=True)
 class FocusAreaReview:
     focus_area: FocusArea
+    mentioned_people: list[str]
     relevant_points: list[str]
     outstanding_questions: list[str]
     action_items: list[str]

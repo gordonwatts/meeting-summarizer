@@ -62,6 +62,7 @@ def test_cross_reference_writes_output(workspace_tmp_path, monkeypatch) -> None:
                 focus_area=FocusArea(
                     id="tracking", title="Tracking", description="desc"
                 ),
+                mentioned_people=["Alice"],
                 relevant_points=["point"],
                 outstanding_questions=[],
                 action_items=[],
