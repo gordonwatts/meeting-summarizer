@@ -10,8 +10,8 @@ from meeting_summarizer.models import (
     ProjectConfig,
     TranscriptSegment,
 )
-from meeting_summarizer.openai_client import (
-    OpenAIClient,
+from meeting_summarizer.openai_client import OpenAIClient
+from meeting_summarizer.analysis.llm_stages import (
     clean_transcript_with_llm,
     cross_reference_with_llm,
     summarize_meeting_with_llm,

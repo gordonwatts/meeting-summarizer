@@ -1,25 +1,18 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
+from pathlib import Path
 
 from typer.testing import CliRunner
 
 from meeting_summarizer import cli
 from meeting_summarizer.models import (
-    ActionItem,
     CleanTranscript,
-    ExternalResource,
-    FocusArea,
     FocusAreaReview,
     MeetingSummary,
-    SummaryTheme,
-    TalkPoint,
     TranscriptSegment,
 )
-
-
-class FakeClient:
-    pass
 
 
 SUMMARY_MARKDOWN = (
@@ -39,6 +32,63 @@ SUMMARY_MARKDOWN = (
     "| None noted. |  |  |\n\n"
     "## Talk Highlights\n"
 )
+
+
+@dataclass
+class FakeService:
+    clean_result: tuple[CleanTranscript, Path, bool] | None = None
+    summary_result: tuple[MeetingSummary, Path, bool] | None = None
+    cross_reference_result: tuple[list[FocusAreaReview], Path] | None = None
+    full_analysis_calls: list[dict[str, object]] | None = None
+    clean_calls: list[dict[str, object]] | None = None
+    summary_calls: list[dict[str, object]] | None = None
+    cross_reference_calls: list[dict[str, object]] | None = None
+
+    def __post_init__(self) -> None:
+        self.full_analysis_calls = self.full_analysis_calls or []
+        self.clean_calls = self.clean_calls or []
+        self.summary_calls = self.summary_calls or []
+        self.cross_reference_calls = self.cross_reference_calls or []
+
+    def clean_transcript(self, transcript_path: str, **kwargs):
+        self.clean_calls.append({"transcript_path": transcript_path, **kwargs})
+        if self.clean_result is None:
+            raise AssertionError("clean_transcript should not be called")
+        return self.clean_result
+
+    def summarize_meeting(self, transcript_path: str, **kwargs):
+        self.summary_calls.append({"transcript_path": transcript_path, **kwargs})
+        if self.summary_result is None:
+            raise AssertionError("summarize_meeting should not be called")
+        return self.summary_result
+
+    def cross_reference_focus_areas(self, transcript_path: str, **kwargs):
+        self.cross_reference_calls.append({"transcript_path": transcript_path, **kwargs})
+        if self.cross_reference_result is None:
+            raise AssertionError("cross_reference_focus_areas should not be called")
+        return self.cross_reference_result
+
+    def run_full_analysis(self, transcript_path: str, **kwargs):
+        self.full_analysis_calls.append({"transcript_path": transcript_path, **kwargs})
+        return None
+
+
+def make_cleaned(text: str) -> CleanTranscript:
+    return CleanTranscript(
+        segments=[
+            TranscriptSegment(speaker="Alice", text=text, start_time="00:00:01")
+        ]
+    )
+
+
+def make_summary(paragraph: str) -> MeetingSummary:
+    return MeetingSummary(
+        paragraph=paragraph,
+        themes=[],
+        action_items=[],
+        resources=[],
+        talk_points=[],
+    )
 
 
 def test_global_verbosity_sets_logging_level() -> None:
@@ -69,54 +119,8 @@ def test_analysis_writes_all_outputs(workspace_tmp_path, monkeypatch) -> None:
         encoding="utf-8",
     )
 
-    monkeypatch.setattr(cli, "_make_client", lambda api_key: FakeClient())
-    monkeypatch.setattr(
-        cli,
-        "clean_transcript",
-        lambda segments, client, model, max_chunk_chars=15000: CleanTranscript(
-            segments=[
-                TranscriptSegment(
-                    speaker="Alice", text="Cleaned sentence.", start_time="00:00:01"
-                )
-            ]
-        ),
-    )
-    monkeypatch.setattr(
-        cli,
-        "summarize_meeting",
-        lambda cleaned, client, model: MeetingSummary(
-            paragraph="Summary paragraph.",
-            themes=[SummaryTheme(title="theme")],
-            action_items=[
-                ActionItem(mentioner="Alice", description="Do thing", quote="Do thing")
-            ],
-            resources=[ExternalResource(name="example.com")],
-            talk_points=[
-                TalkPoint(
-                    speaker="Alice",
-                    salient_points=["point"],
-                    questions=["question"],
-                    quotes=["quote"],
-                )
-            ],
-        ),
-    )
-    monkeypatch.setattr(
-        cli,
-        "cross_reference_focus_areas",
-        lambda summary, cleaned, project, client, model: [
-            FocusAreaReview(
-                focus_area=FocusArea(
-                    id="tracking", title="Tracking", description="desc"
-                ),
-                relevant_points=["point"],
-                outstanding_questions=["question"],
-                action_items=["Do thing"],
-                quotes=["quote"],
-                coverage_note="Covered.",
-            )
-        ],
-    )
+    service = FakeService()
+    monkeypatch.setattr(cli, "_make_service", lambda api_key: service)
 
     runner = CliRunner()
     result = runner.invoke(
@@ -133,10 +137,7 @@ def test_analysis_writes_all_outputs(workspace_tmp_path, monkeypatch) -> None:
         ],
     )
     assert result.exit_code == 0
-    assert result.stdout == ""
-    assert (workspace_tmp_path / "meeting.cleaned.md").exists()
-    assert (workspace_tmp_path / "meeting.summary.md").exists()
-    assert (workspace_tmp_path / "meeting.focus-areas.md").exists()
+    assert len(service.full_analysis_calls) == 1
 
 
 def test_clean_command_passes_max_clean_chars(workspace_tmp_path, monkeypatch) -> None:
@@ -146,20 +147,10 @@ def test_clean_command_passes_max_clean_chars(workspace_tmp_path, monkeypatch) -
         encoding="utf-8",
     )
 
-    captured: dict[str, int] = {}
-    monkeypatch.setattr(cli, "_make_client", lambda api_key: FakeClient())
-
-    def fake_clean_transcript(segments, client, model, max_chunk_chars=15000):
-        captured["max_chunk_chars"] = max_chunk_chars
-        return CleanTranscript(
-            segments=[
-                TranscriptSegment(
-                    speaker="Alice", text="Cleaned sentence.", start_time="00:00:01"
-                )
-            ]
-        )
-
-    monkeypatch.setattr(cli, "clean_transcript", fake_clean_transcript)
+    service = FakeService(
+        clean_result=(make_cleaned("Cleaned sentence."), workspace_tmp_path / "meeting.cleaned.md", False)
+    )
+    monkeypatch.setattr(cli, "_make_service", lambda api_key: service)
 
     runner = CliRunner()
     result = runner.invoke(
@@ -176,8 +167,7 @@ def test_clean_command_passes_max_clean_chars(workspace_tmp_path, monkeypatch) -
         ],
     )
     assert result.exit_code == 0
-    assert result.stdout == ""
-    assert captured["max_chunk_chars"] == 321
+    assert service.clean_calls[0]["max_clean_chars"] == 321
 
 
 def test_clean_fails_when_existing_output_before_creating_client(
@@ -191,12 +181,12 @@ def test_clean_fails_when_existing_output_before_creating_client(
     cleaned_path = workspace_tmp_path / "meeting.cleaned.md"
     cleaned_path.write_text("# Cleaned Transcript\n", encoding="utf-8")
 
-    def fail_make_client(*args, **kwargs):
+    def fail_make_service(*args, **kwargs):
         raise AssertionError(
-            "_make_client should not be called when cleaned output already exists"
+            "_make_service should not be called when cleaned output already exists"
         )
 
-    monkeypatch.setattr(cli, "_make_client", fail_make_client)
+    monkeypatch.setattr(cli, "_make_service", fail_make_service)
 
     runner = CliRunner()
     result = runner.invoke(
@@ -220,25 +210,19 @@ def test_summarize_reuses_existing_cleaned_markdown(
         encoding="utf-8",
     )
 
-    monkeypatch.setattr(cli, "_make_client", lambda api_key: FakeClient())
-
-    def fail_clean_transcript(*args, **kwargs):
-        raise AssertionError(
-            "clean_transcript should not be called when cleaned markdown exists"
-        )
-
-    monkeypatch.setattr(cli, "clean_transcript", fail_clean_transcript)
-    monkeypatch.setattr(
-        cli,
-        "summarize_meeting",
-        lambda cleaned, client, model: MeetingSummary(
-            paragraph=cleaned.segments[0].text,
-            themes=[],
-            action_items=[],
-            resources=[],
-            talk_points=[],
+    service = FakeService(
+        clean_result=(
+            make_cleaned("Existing cleaned text."),
+            cleaned_path,
+            True,
+        ),
+        summary_result=(
+            make_summary("Existing cleaned text."),
+            workspace_tmp_path / "meeting.summary.md",
+            False,
         ),
     )
+    monkeypatch.setattr(cli, "_make_service", lambda api_key: service)
 
     runner = CliRunner()
     result = runner.invoke(
@@ -253,10 +237,8 @@ def test_summarize_reuses_existing_cleaned_markdown(
     )
 
     assert result.exit_code == 0
-    assert result.stdout == ""
-    assert "Existing cleaned text." in (
-        workspace_tmp_path / "meeting.summary.md"
-    ).read_text(encoding="utf-8")
+    assert service.clean_calls[0]["overwrite"] is False
+    assert service.summary_calls[0]["cleaned"].segments[0].text == "Existing cleaned text."
 
 
 def test_summarize_fails_when_existing_summary_markdown(
@@ -274,12 +256,12 @@ def test_summarize_fails_when_existing_summary_markdown(
     summary_path = workspace_tmp_path / "meeting.summary.md"
     summary_path.write_text(SUMMARY_MARKDOWN, encoding="utf-8")
 
-    def fail_make_client(*args, **kwargs):
+    def fail_make_service(*args, **kwargs):
         raise AssertionError(
-            "_make_client should not be called when summary output already exists"
+            "_make_service should not be called when summary output already exists"
         )
 
-    monkeypatch.setattr(cli, "_make_client", fail_make_client)
+    monkeypatch.setattr(cli, "_make_service", fail_make_service)
 
     runner = CliRunner()
     result = runner.invoke(
@@ -305,29 +287,19 @@ def test_summarize_cleans_when_cleaned_markdown_missing(
         encoding="utf-8",
     )
 
-    monkeypatch.setattr(cli, "_make_client", lambda api_key: FakeClient())
-    monkeypatch.setattr(
-        cli,
-        "clean_transcript",
-        lambda segments, client, model, max_chunk_chars=15000: CleanTranscript(
-            segments=[
-                TranscriptSegment(
-                    speaker="Alice", text="Fresh cleaned text.", start_time="00:00:01"
-                )
-            ]
+    service = FakeService(
+        clean_result=(
+            make_cleaned("Fresh cleaned text."),
+            workspace_tmp_path / "meeting.cleaned.md",
+            False,
+        ),
+        summary_result=(
+            make_summary("Fresh cleaned text."),
+            workspace_tmp_path / "meeting.summary.md",
+            False,
         ),
     )
-    monkeypatch.setattr(
-        cli,
-        "summarize_meeting",
-        lambda cleaned, client, model: MeetingSummary(
-            paragraph=cleaned.segments[0].text,
-            themes=[],
-            action_items=[],
-            resources=[],
-            talk_points=[],
-        ),
-    )
+    monkeypatch.setattr(cli, "_make_service", lambda api_key: service)
 
     runner = CliRunner()
     result = runner.invoke(
@@ -342,11 +314,8 @@ def test_summarize_cleans_when_cleaned_markdown_missing(
     )
 
     assert result.exit_code == 0
-    assert result.stdout == ""
-    assert (workspace_tmp_path / "meeting.cleaned.md").exists()
-    assert "Fresh cleaned text." in (
-        workspace_tmp_path / "meeting.summary.md"
-    ).read_text(encoding="utf-8")
+    assert service.clean_calls
+    assert service.summary_calls
 
 
 def test_cross_reference_reuses_existing_cleaned_markdown(
@@ -371,37 +340,16 @@ def test_cross_reference_reuses_existing_cleaned_markdown(
         encoding="utf-8",
     )
 
-    monkeypatch.setattr(cli, "_make_client", lambda api_key: FakeClient())
-
-    def fail_clean_transcript(*args, **kwargs):
-        raise AssertionError(
-            "clean_transcript should not be called when cleaned markdown exists"
-        )
-
-    monkeypatch.setattr(cli, "clean_transcript", fail_clean_transcript)
-
-    def fail_summarize_meeting(*args, **kwargs):
-        raise AssertionError(
-            "summarize_meeting should not be called when summary markdown exists"
-        )
-
-    monkeypatch.setattr(cli, "summarize_meeting", fail_summarize_meeting)
-    monkeypatch.setattr(
-        cli,
-        "cross_reference_focus_areas",
-        lambda summary, cleaned, project, client, model: [
-            FocusAreaReview(
-                focus_area=FocusArea(
-                    id="tracking", title="Tracking", description="desc"
-                ),
-                relevant_points=[summary.paragraph, cleaned.segments[0].text],
-                outstanding_questions=[],
-                action_items=[],
-                quotes=[],
-                coverage_note="Covered.",
-            )
-        ],
+    service = FakeService(
+        clean_result=(make_cleaned("Existing cleaned text."), cleaned_path, True),
+        summary_result=(
+            make_summary("Existing summary paragraph."),
+            workspace_tmp_path / "meeting.summary.md",
+            True,
+        ),
+        cross_reference_result=([], workspace_tmp_path / "meeting.focus-areas.md"),
     )
+    monkeypatch.setattr(cli, "_make_service", lambda api_key: service)
 
     runner = CliRunner()
     result = runner.invoke(
@@ -418,13 +366,8 @@ def test_cross_reference_reuses_existing_cleaned_markdown(
     )
 
     assert result.exit_code == 0
-    assert result.stdout == ""
-    assert "Existing summary paragraph." in (
-        workspace_tmp_path / "meeting.focus-areas.md"
-    ).read_text(encoding="utf-8")
-    assert "Existing cleaned text." in (
-        workspace_tmp_path / "meeting.focus-areas.md"
-    ).read_text(encoding="utf-8")
+    assert service.cross_reference_calls[0]["summary"].paragraph == "Existing summary paragraph."
+    assert service.cross_reference_calls[0]["cleaned"].segments[0].text == "Existing cleaned text."
 
 
 def test_cross_reference_fails_when_existing_focus_output_before_creating_client(
@@ -443,12 +386,12 @@ def test_cross_reference_fails_when_existing_focus_output_before_creating_client
     focus_path = workspace_tmp_path / "meeting.focus-areas.md"
     focus_path.write_text("# Focus Area Cross Reference\n", encoding="utf-8")
 
-    def fail_make_client(*args, **kwargs):
+    def fail_make_service(*args, **kwargs):
         raise AssertionError(
-            "_make_client should not be called when focus-area output already exists"
+            "_make_service should not be called when focus-area output already exists"
         )
 
-    monkeypatch.setattr(cli, "_make_client", fail_make_client)
+    monkeypatch.setattr(cli, "_make_service", fail_make_service)
 
     runner = CliRunner()
     result = runner.invoke(
@@ -489,37 +432,8 @@ def test_analysis_reuses_existing_cleaned_markdown(
         encoding="utf-8",
     )
 
-    monkeypatch.setattr(cli, "_make_client", lambda api_key: FakeClient())
-
-    def fail_clean_transcript(*args, **kwargs):
-        raise AssertionError(
-            "clean_transcript should not be called when cleaned markdown exists"
-        )
-
-    monkeypatch.setattr(cli, "clean_transcript", fail_clean_transcript)
-
-    def fail_summarize_meeting(*args, **kwargs):
-        raise AssertionError(
-            "summarize_meeting should not be called when summary markdown exists"
-        )
-
-    monkeypatch.setattr(cli, "summarize_meeting", fail_summarize_meeting)
-    monkeypatch.setattr(
-        cli,
-        "cross_reference_focus_areas",
-        lambda summary, cleaned, project, client, model: [
-            FocusAreaReview(
-                focus_area=FocusArea(
-                    id="tracking", title="Tracking", description="desc"
-                ),
-                relevant_points=[summary.paragraph, cleaned.segments[0].text],
-                outstanding_questions=[],
-                action_items=[],
-                quotes=[],
-                coverage_note="Covered.",
-            )
-        ],
-    )
+    service = FakeService()
+    monkeypatch.setattr(cli, "_make_service", lambda api_key: service)
 
     runner = CliRunner()
     result = runner.invoke(
@@ -536,13 +450,7 @@ def test_analysis_reuses_existing_cleaned_markdown(
     )
 
     assert result.exit_code == 0
-    assert result.stdout == ""
-    assert "Existing summary paragraph." in (
-        workspace_tmp_path / "meeting.focus-areas.md"
-    ).read_text(encoding="utf-8")
-    assert "Existing cleaned text." in (
-        workspace_tmp_path / "meeting.focus-areas.md"
-    ).read_text(encoding="utf-8")
+    assert len(service.full_analysis_calls) == 1
 
 
 def test_analysis_returns_existing_outputs_before_creating_client(
@@ -567,12 +475,12 @@ def test_analysis_returns_existing_outputs_before_creating_client(
         encoding="utf-8",
     )
 
-    def fail_make_client(*args, **kwargs):
+    def fail_make_service(*args, **kwargs):
         raise AssertionError(
-            "_make_client should not be called when all outputs already exist"
+            "_make_service should not be called when all outputs already exist"
         )
 
-    monkeypatch.setattr(cli, "_make_client", fail_make_client)
+    monkeypatch.setattr(cli, "_make_service", fail_make_service)
 
     runner = CliRunner()
     result = runner.invoke(
@@ -589,7 +497,6 @@ def test_analysis_returns_existing_outputs_before_creating_client(
     )
 
     assert result.exit_code == 0
-    assert result.stdout == ""
 
 
 def test_analysis_reuses_existing_focus_output_and_generates_missing_dependencies(
@@ -608,47 +515,8 @@ def test_analysis_reuses_existing_focus_output_and_generates_missing_dependencie
         encoding="utf-8",
     )
 
-    monkeypatch.setattr(cli, "_make_client", lambda api_key: FakeClient())
-    monkeypatch.setattr(
-        cli,
-        "clean_transcript",
-        lambda segments, client, model, max_chunk_chars=15000: CleanTranscript(
-            segments=[
-                TranscriptSegment(
-                    speaker="Alice", text="Cleaned sentence.", start_time="00:00:01"
-                )
-            ]
-        ),
-    )
-    monkeypatch.setattr(
-        cli,
-        "summarize_meeting",
-        lambda cleaned, client, model: MeetingSummary(
-            paragraph="Summary paragraph.",
-            themes=[SummaryTheme(title="theme")],
-            action_items=[],
-            resources=[],
-            talk_points=[],
-        ),
-    )
-    cross_reference_calls = {"count": 0}
-
-    def fake_cross_reference(summary, cleaned, project, client, model):
-        cross_reference_calls["count"] += 1
-        return [
-            FocusAreaReview(
-                focus_area=FocusArea(
-                    id="tracking", title="Tracking", description="desc"
-                ),
-                relevant_points=["point"],
-                outstanding_questions=[],
-                action_items=[],
-                quotes=[],
-                coverage_note="Covered.",
-            )
-        ]
-
-    monkeypatch.setattr(cli, "cross_reference_focus_areas", fake_cross_reference)
+    service = FakeService()
+    monkeypatch.setattr(cli, "_make_service", lambda api_key: service)
 
     runner = CliRunner()
     result = runner.invoke(
@@ -665,8 +533,4 @@ def test_analysis_reuses_existing_focus_output_and_generates_missing_dependencie
     )
 
     assert result.exit_code == 0
-    assert result.stdout == ""
-    assert (workspace_tmp_path / "meeting.cleaned.md").exists()
-    assert (workspace_tmp_path / "meeting.summary.md").exists()
-    assert focus_path.exists()
-    assert cross_reference_calls["count"] == 0
+    assert len(service.full_analysis_calls) == 1

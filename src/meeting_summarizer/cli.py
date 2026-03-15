@@ -7,11 +7,7 @@ from typing import Annotated
 import typer
 from rich.console import Console
 
-from meeting_summarizer.analysis.pipeline import (
-    clean_transcript,
-    cross_reference_focus_areas,
-    summarize_meeting,
-)
+from meeting_summarizer.analysis.service import TranscriptAnalysisService
 from meeting_summarizer.config import (
     DEFAULT_MAX_CLEAN_CHARS,
     DEFAULT_MODEL_ECONOMY,
@@ -20,19 +16,10 @@ from meeting_summarizer.config import (
     store_api_key,
 )
 from meeting_summarizer.logging_config import configure_logging
-from meeting_summarizer.models import CleanTranscript, MeetingSummary
+from meeting_summarizer.markdown.paths import derive_output_path
+from meeting_summarizer.markdown.project_display import show_project
 from meeting_summarizer.openai_client import OpenAIClient
 from meeting_summarizer.project import add_focus_area, init_project, load_project
-from meeting_summarizer.render import (
-    derive_output_path,
-    parse_cleaned_markdown,
-    parse_summary_markdown,
-    render_cleaned_markdown,
-    render_focus_area_markdown,
-    render_summary_markdown,
-    show_project,
-)
-from meeting_summarizer.transcripts.parser import parse_transcript
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -74,28 +61,8 @@ def _make_client(api_key: str | None) -> OpenAIClient:
     return OpenAIClient(api_key=resolve_api_key(api_key))
 
 
-def _write_markdown(output_path: Path, content: str, overwrite: bool) -> None:
-    if output_path.exists() and not overwrite:
-        raise typer.BadParameter(
-            f"{output_path} already exists. Use --overwrite to replace it."
-        )
-    output_path.write_text(content, encoding="utf-8")
-
-
-def _ensure_final_output_writable(output_path: Path, overwrite: bool) -> None:
-    if output_path.exists() and not overwrite:
-        raise typer.BadParameter(
-            f"{output_path} already exists. Use --overwrite to replace it."
-        )
-
-
-def _all_outputs_exist(output_paths: list[Path]) -> bool:
-    return all(output_path.exists() for output_path in output_paths)
-
-
-def _log_output_paths(message: str, output_paths: list[Path]) -> None:
-    for output_path in output_paths:
-        logger.info(f"{message} {output_path}")
+def _make_service(api_key: str | None) -> TranscriptAnalysisService:
+    return TranscriptAnalysisService(_make_client(api_key))
 
 
 def _resolve_models(
@@ -106,46 +73,6 @@ def _resolve_models(
         economy or models.get("economy", DEFAULT_MODEL_ECONOMY),
         judgment or models.get("judgment", DEFAULT_MODEL_JUDGMENT),
     )
-
-
-def _load_or_clean_transcript(
-    transcript_path: str,
-    output_dir: str | None,
-    client: OpenAIClient,
-    economy_model: str,
-    max_clean_chars: int,
-    overwrite: bool,
-) -> tuple[CleanTranscript, Path, bool]:
-    cleaned_path = derive_output_path(transcript_path, ".cleaned.md", output_dir)
-    if cleaned_path.exists() and not overwrite:
-        logger.info(f"Reusing existing cleaned transcript at {cleaned_path}")
-        cleaned = parse_cleaned_markdown(cleaned_path.read_text(encoding="utf-8"))
-        return cleaned, cleaned_path, True
-
-    cleaned = clean_transcript(
-        parse_transcript(transcript_path), client, economy_model, max_clean_chars
-    )
-    _write_markdown(cleaned_path, render_cleaned_markdown(cleaned), overwrite)
-    return cleaned, cleaned_path, False
-
-
-def _load_or_summarize_meeting(
-    transcript_path: str,
-    output_dir: str | None,
-    cleaned: CleanTranscript,
-    client: OpenAIClient,
-    judgment_model: str,
-    overwrite: bool,
-) -> tuple[MeetingSummary, Path, bool]:
-    summary_path = derive_output_path(transcript_path, ".summary.md", output_dir)
-    if summary_path.exists() and not overwrite:
-        logger.info(f"Reusing existing meeting summary at {summary_path}")
-        summary = parse_summary_markdown(summary_path.read_text(encoding="utf-8"))
-        return summary, summary_path, True
-
-    summary = summarize_meeting(cleaned, client, judgment_model)
-    _write_markdown(summary_path, render_summary_markdown(summary), overwrite)
-    return summary, summary_path, False
 
 
 @project_app.command(
@@ -169,7 +96,10 @@ def project_add_focus_area(
     description: str = typer.Option(..., "--description"),
     notes: str | None = typer.Option(None, "--notes"),
 ) -> None:
-    area = add_focus_area(path, title, description, notes)
+    try:
+        area = add_focus_area(path, title, description, notes)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
     logger.info(f"Added focus area {area.id}")
 
 
@@ -179,7 +109,11 @@ def project_add_focus_area(
     short_help="Show the project configuration.",
 )
 def project_show(path: str) -> None:
-    show_project(load_project(path), Console())
+    try:
+        project = load_project(path)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    show_project(project, Console())
 
 
 @auth_app.command(
@@ -212,13 +146,16 @@ def transcript_clean(
     ),
 ) -> None:
     output_path = derive_output_path(transcript_path, ".cleaned.md", output_dir)
-    _ensure_final_output_writable(output_path, overwrite)
-    client = _make_client(api_key)
+    service = _make_service(api_key)
+    _guard_writable_output(output_path, overwrite)
     economy_model, _ = _resolve_models(None, model_economy, None)
-    cleaned = clean_transcript(
-        parse_transcript(transcript_path), client, economy_model, max_clean_chars
+    _, output_path, _ = service.clean_transcript(
+        transcript_path,
+        output_dir=output_dir,
+        model=economy_model,
+        max_clean_chars=max_clean_chars,
+        overwrite=overwrite,
     )
-    _write_markdown(output_path, render_cleaned_markdown(cleaned), overwrite)
     logger.info(f"Wrote cleaned transcript to {output_path}")
 
 
@@ -249,14 +186,22 @@ def transcript_summarize(
     ),
 ) -> None:
     summary_path = derive_output_path(transcript_path, ".summary.md", output_dir)
-    _ensure_final_output_writable(summary_path, overwrite)
-    client = _make_client(api_key)
+    service = _make_service(api_key)
+    _guard_writable_output(summary_path, overwrite)
     economy_model, judgment_model = _resolve_models(None, model_economy, model_judgment)
-    cleaned, _, _ = _load_or_clean_transcript(
-        transcript_path, output_dir, client, economy_model, max_clean_chars, overwrite
+    cleaned, _, _ = service.clean_transcript(
+        transcript_path,
+        output_dir=output_dir,
+        model=economy_model,
+        max_clean_chars=max_clean_chars,
+        overwrite=overwrite,
     )
-    _, summary_path, _ = _load_or_summarize_meeting(
-        transcript_path, output_dir, cleaned, client, judgment_model, overwrite
+    _, summary_path, _ = service.summarize_meeting(
+        transcript_path,
+        output_dir=output_dir,
+        cleaned=cleaned,
+        model=judgment_model,
+        overwrite=overwrite,
     )
     logger.info(f"Wrote meeting summary to {summary_path}")
 
@@ -288,23 +233,39 @@ def transcript_cross_reference(
         DEFAULT_MAX_CLEAN_CHARS, "--max-clean-chars", min=1
     ),
 ) -> None:
-    project_config = load_project(project)
+    try:
+        project_config = load_project(project)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
     focus_path = derive_output_path(transcript_path, ".focus-areas.md", output_dir)
-    _ensure_final_output_writable(focus_path, overwrite)
-    client = _make_client(api_key)
+    service = _make_service(api_key)
+    _guard_writable_output(focus_path, overwrite)
     economy_model, judgment_model = _resolve_models(
         project_config.models, model_economy, model_judgment
     )
-    cleaned, _, _ = _load_or_clean_transcript(
-        transcript_path, output_dir, client, economy_model, max_clean_chars, overwrite
+    cleaned, _, _ = service.clean_transcript(
+        transcript_path,
+        output_dir=output_dir,
+        model=economy_model,
+        max_clean_chars=max_clean_chars,
+        overwrite=overwrite,
     )
-    summary, _, _ = _load_or_summarize_meeting(
-        transcript_path, output_dir, cleaned, client, judgment_model, overwrite
+    summary, _, _ = service.summarize_meeting(
+        transcript_path,
+        output_dir=output_dir,
+        cleaned=cleaned,
+        model=judgment_model,
+        overwrite=overwrite,
     )
-    reviews = cross_reference_focus_areas(
-        summary, cleaned, project_config, client, economy_model
+    _, focus_path = service.cross_reference_focus_areas(
+        transcript_path,
+        project_path=project,
+        output_dir=output_dir,
+        summary=summary,
+        cleaned=cleaned,
+        model=economy_model,
+        overwrite=overwrite,
     )
-    _write_markdown(focus_path, render_focus_area_markdown(reviews), overwrite)
     logger.info(f"Wrote focus-area cross reference to {focus_path}")
 
 
@@ -335,28 +296,37 @@ def transcript_analysis(
         DEFAULT_MAX_CLEAN_CHARS, "--max-clean-chars", min=1
     ),
 ) -> None:
-    project_config = load_project(project)
-    cleaned_path = derive_output_path(transcript_path, ".cleaned.md", output_dir)
-    summary_path = derive_output_path(transcript_path, ".summary.md", output_dir)
-    focus_path = derive_output_path(transcript_path, ".focus-areas.md", output_dir)
-    output_paths = [cleaned_path, summary_path, focus_path]
-    if not overwrite and _all_outputs_exist(output_paths):
-        logger.info("All analysis outputs already exist; returning without work.")
-        _log_output_paths("Existing analysis output:", output_paths)
+    try:
+        project_config = load_project(project)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    output_paths = [
+        derive_output_path(transcript_path, ".cleaned.md", output_dir),
+        derive_output_path(transcript_path, ".summary.md", output_dir),
+        derive_output_path(transcript_path, ".focus-areas.md", output_dir),
+    ]
+    if not overwrite and TranscriptAnalysisService.all_outputs_exist(output_paths):
+        TranscriptAnalysisService.log_output_paths(
+            "Existing analysis output:", output_paths
+        )
         return
-    client = _make_client(api_key)
+    service = _make_service(api_key)
     economy_model, judgment_model = _resolve_models(
         project_config.models, model_economy, model_judgment
     )
-    cleaned, cleaned_path, _ = _load_or_clean_transcript(
-        transcript_path, output_dir, client, economy_model, max_clean_chars, overwrite
+    service.run_full_analysis(
+        transcript_path,
+        project_path=project,
+        output_dir=output_dir,
+        economy_model=economy_model,
+        judgment_model=judgment_model,
+        max_clean_chars=max_clean_chars,
+        overwrite=overwrite,
     )
-    summary, summary_path, _ = _load_or_summarize_meeting(
-        transcript_path, output_dir, cleaned, client, judgment_model, overwrite
-    )
-    if overwrite or not focus_path.exists():
-        reviews = cross_reference_focus_areas(
-            summary, cleaned, project_config, client, economy_model
-        )
-        _write_markdown(focus_path, render_focus_area_markdown(reviews), overwrite)
-    _log_output_paths("Analysis output ready:", output_paths)
+
+
+def _guard_writable_output(output_path: Path, overwrite: bool) -> None:
+    try:
+        TranscriptAnalysisService.ensure_output_writable(output_path, overwrite)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
