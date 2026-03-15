@@ -26,6 +26,19 @@ class ActionItem:
 
 
 @dataclass(slots=True)
+class SummaryTheme:
+    title: str
+    details: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class ExternalResource:
+    name: str
+    resource_type: str | None = None
+    context: str | None = None
+
+
+@dataclass(slots=True)
 class TalkPoint:
     speaker: str
     salient_points: list[str]
@@ -36,9 +49,9 @@ class TalkPoint:
 @dataclass(slots=True)
 class MeetingSummary:
     paragraph: str
-    themes: list[str]
+    themes: list[SummaryTheme]
     action_items: list[ActionItem]
-    resources: list[str]
+    resources: list[ExternalResource]
     talk_points: list[TalkPoint]
 
 

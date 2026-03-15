@@ -35,3 +35,30 @@ packages = ["src/meeting_summarizer"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-p no:cacheprovider"
+
+[tool.black]
+target-version = ["py311", "py312"]
+extend-exclude = """
+(
+  ^/\\.cache/
+  | ^/\\.git/
+  | ^/\\.test-workdir/
+  | ^/\\.tmp/
+  | ^/\\.venv/
+)
+"""
+
+[tool.flake8]
+max-line-length = 88
+jobs = 1
+extend-ignore = [
+  "E203",
+  "E501",
+]
+exclude = [
+  ".cache",
+  ".git",
+  ".test-workdir",
+  ".tmp",
+  ".venv",
+]

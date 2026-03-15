@@ -17,6 +17,10 @@
 - When a project path has no extension, resolve it to `.yaml`.
 - Prompts should prefer direct quotes and preserve traceability back to cleaned transcript content.
 - Keep analysis stages factored so tests can mock LLM responses without patching unrelated logic.
+- Docstrings:
+  - Private functions that start with `_` should usually have a short one- or two-line docstring unless they are truly trivial.
+  - Obvious one- or two-line functions do not need a docstring.
+  - Public functions used across modules should have a full docstring that documents arguments and returns.
 
 ## Tests
 - Add or update tests for transcript parsing, project YAML behavior, Markdown rendering, CLI behavior, and every OpenAI-backed stage with mocked responses.

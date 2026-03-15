@@ -1,0 +1,12 @@
+[flake8]
+max-line-length = 88
+jobs = 1
+extend-ignore =
+    E203,
+    E501
+exclude =
+    .cache,
+    .git,
+    .test-workdir,
+    .tmp,
+    .venv

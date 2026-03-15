@@ -4,6 +4,14 @@ import logging
 
 
 def configure_logging(verbosity: int) -> None:
+    """Configure root logging from the CLI verbosity flag.
+
+    Args:
+        verbosity: Count of `-v` flags supplied on the command line.
+
+    Returns:
+        None.
+    """
     if verbosity >= 2:
         level = logging.DEBUG
     elif verbosity == 1:

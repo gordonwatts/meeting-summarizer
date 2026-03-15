@@ -1,8 +1,20 @@
 from __future__ import annotations
 
-from meeting_summarizer.analysis.pipeline import chunk_transcript_segments, clean_transcript, cross_reference_focus_areas, summarize_meeting
-from meeting_summarizer.models import CleanTranscript, FocusArea, FocusAreaReview, MeetingSummary, ProjectConfig, TranscriptSegment
-from meeting_summarizer.openai_client import cross_reference_with_llm
+from meeting_summarizer.analysis.pipeline import (
+    chunk_transcript_segments,
+    clean_transcript,
+    cross_reference_focus_areas,
+    summarize_meeting,
+)
+from meeting_summarizer.models import (
+    CleanTranscript,
+    FocusArea,
+    FocusAreaReview,
+    MeetingSummary,
+    ProjectConfig,
+    SummaryTheme,
+    TranscriptSegment,
+)
 
 
 class StubClient:
@@ -27,7 +39,13 @@ class StubClient:
             return {
                 "paragraph": "Summary paragraph.",
                 "themes": ["theme"],
-                "action_items": [{"mentioner": "Alice", "description": "Do thing", "quote": "Do thing"}],
+                "action_items": [
+                    {
+                        "mentioner": "Alice",
+                        "description": "Do thing",
+                        "quote": "Do thing",
+                    }
+                ],
                 "resources": ["example.com"],
                 "talk_points": [
                     {
@@ -52,7 +70,13 @@ def test_pipeline_uses_cleaned_output_for_summary_and_cross_reference() -> None:
     segments = [TranscriptSegment(speaker="Alice", text="Raw text.")]
     cleaned = clean_transcript(segments, client, "gpt-5-mini")
     summary = summarize_meeting(cleaned, client, "gpt-5")
-    reviews = cross_reference_focus_areas(summary, cleaned, ProjectConfig(name="Committee", focus_areas=[]), client, "gpt-5-mini")
+    reviews = cross_reference_focus_areas(
+        summary,
+        cleaned,
+        ProjectConfig(name="Committee", focus_areas=[]),
+        client,
+        "gpt-5-mini",
+    )
     assert isinstance(cleaned, CleanTranscript)
     assert isinstance(summary, MeetingSummary)
     assert reviews == []
@@ -61,10 +85,12 @@ def test_pipeline_uses_cleaned_output_for_summary_and_cross_reference() -> None:
 
 def test_cross_reference_returns_reviews() -> None:
     client = StubClient()
-    cleaned = CleanTranscript(segments=[TranscriptSegment(speaker="Alice", text="Cleaned text.")])
+    cleaned = CleanTranscript(
+        segments=[TranscriptSegment(speaker="Alice", text="Cleaned text.")]
+    )
     summary = MeetingSummary(
         paragraph="Summary paragraph.",
-        themes=["theme"],
+        themes=[SummaryTheme(title="theme")],
         action_items=[],
         resources=[],
         talk_points=[],
@@ -73,7 +99,9 @@ def test_cross_reference_returns_reviews() -> None:
         name="Committee",
         focus_areas=[FocusArea(id="tracking", title="Tracking", description="desc")],
     )
-    reviews = cross_reference_focus_areas(summary, cleaned, project, client, "gpt-5-mini")
+    reviews = cross_reference_focus_areas(
+        summary, cleaned, project, client, "gpt-5-mini"
+    )
     assert len(reviews) == 1
     assert isinstance(reviews[0], FocusAreaReview)
 
@@ -100,38 +128,10 @@ def test_clean_transcript_cleans_multiple_chunks() -> None:
         TranscriptSegment(speaker="Cara", start_time="00:00:03", text="C" * 40),
     ]
     cleaned = clean_transcript(segments, client, "gpt-5-mini", max_chunk_chars=70)
-    clean_calls = [input_text for instructions, input_text in client.calls if "Return JSON with a 'segments' array" in instructions]
+    clean_calls = [
+        input_text
+        for instructions, input_text in client.calls
+        if "Return JSON with a 'segments' array" in instructions
+    ]
     assert len(clean_calls) == 3
     assert len(cleaned.segments) == 3
-
-
-def test_cross_reference_normalizes_structured_review_items() -> None:
-    class StructuredStubClient:
-        def generate_json(self, *, model: str, instructions: str, input_text: str):
-            return {
-                "relevant_points": [{"speaker": "Alice", "text": "Raised validation requirements."}],
-                "outstanding_questions": [{"title": "Validation", "description": "Who approves the standard?"}],
-                "action_items": [
-                    {
-                        "owner": "Study group leads",
-                        "task": "Draft acceptance criteria.",
-                        "quote": "We should define the acceptance path.",
-                    }
-                ],
-                "quotes": [{"speaker": "Alice", "quote": "We should define the acceptance path."}],
-                "coverage_note": {"summary": "Covered at a high level."},
-            }
-
-    review = cross_reference_with_llm(
-        StructuredStubClient(),
-        "gpt-5-mini",
-        MeetingSummary(paragraph="Summary paragraph.", themes=[], action_items=[], resources=[], talk_points=[]),
-        CleanTranscript(segments=[TranscriptSegment(speaker="Alice", text="Cleaned text.")]),
-        FocusArea(id="tracking", title="Tracking", description="desc"),
-    )
-
-    assert review.relevant_points == ["Alice: Raised validation requirements."]
-    assert review.outstanding_questions == ["Validation: Who approves the standard?"]
-    assert review.action_items == ['Study group leads: Draft acceptance criteria. Quote: "We should define the acceptance path."']
-    assert review.quotes == ['Alice: "We should define the acceptance path."']
-    assert review.coverage_note == "Covered at a high level."

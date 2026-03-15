@@ -14,9 +14,7 @@ def test_parse_vtt_merges_adjacent_speaker_turns(sample_vtt) -> None:
 def test_parse_txt_appends_continuation_lines(workspace_tmp_path) -> None:
     path = workspace_tmp_path / "meeting.txt"
     path.write_text(
-        "00:00:01 Alice: First line\n"
-        "continued thought\n"
-        "00:00:04 Bob: Reply\n",
+        "00:00:01 Alice: First line\n" "continued thought\n" "00:00:04 Bob: Reply\n",
         encoding="utf-8",
     )
     segments = parse_transcript(path)

@@ -15,10 +15,20 @@ VTT_SPEAKER_RE = re.compile(r"^(?P<speaker>[^:]+):\s*(?P<text>.+)$")
 TXT_LINE_RE = re.compile(
     r"^(?P<time>\d{1,2}:\d{2}:\d{2})(?:\s+)?(?P<speaker>[^:]+):\s*(?P<text>.+)$"
 )
-ZOOM_BLOCK_HEADER_RE = re.compile(r"^\[(?P<speaker>.+?)\]\s+(?P<time>\d{1,2}:\d{2}:\d{2})$")
+ZOOM_BLOCK_HEADER_RE = re.compile(
+    r"^\[(?P<speaker>.+?)\]\s+(?P<time>\d{1,2}:\d{2}:\d{2})$"
+)
 
 
 def parse_transcript(path: str | Path) -> list[TranscriptSegment]:
+    """Parse a supported transcript file into normalized transcript segments.
+
+    Args:
+        path: Transcript file path.
+
+    Returns:
+        A list of parsed transcript segments.
+    """
     transcript_path = Path(path)
     raw_text = transcript_path.read_text(encoding="utf-8")
     if transcript_path.suffix.lower() == ".vtt":
@@ -29,6 +39,7 @@ def parse_transcript(path: str | Path) -> list[TranscriptSegment]:
 
 
 def _parse_vtt(raw_text: str) -> list[TranscriptSegment]:
+    """Parse a WebVTT transcript into raw segments."""
     blocks = [block.strip() for block in raw_text.split("\n\n") if block.strip()]
     segments: list[TranscriptSegment] = []
     for block in blocks:
@@ -60,6 +71,7 @@ def _parse_vtt(raw_text: str) -> list[TranscriptSegment]:
 
 
 def _parse_zoom_text(raw_text: str) -> list[TranscriptSegment]:
+    """Parse Zoom text transcripts in line-based or continuation-line form."""
     if segments := _parse_zoom_text_blocks(raw_text):
         return segments
 
@@ -86,8 +98,11 @@ def _parse_zoom_text(raw_text: str) -> list[TranscriptSegment]:
 
 
 def _parse_zoom_text_blocks(raw_text: str) -> list[TranscriptSegment]:
+    """Parse Zoom text transcripts that are arranged in speaker blocks."""
     segments: list[TranscriptSegment] = []
-    blocks = [block.strip() for block in re.split(r"\r?\n\s*\r?\n", raw_text) if block.strip()]
+    blocks = [
+        block.strip() for block in re.split(r"\r?\n\s*\r?\n", raw_text) if block.strip()
+    ]
     for block in blocks:
         lines = [line.strip() for line in block.splitlines() if line.strip()]
         if len(lines) < 2:
@@ -107,7 +122,10 @@ def _parse_zoom_text_blocks(raw_text: str) -> list[TranscriptSegment]:
     return segments
 
 
-def _merge_adjacent_segments(segments: list[TranscriptSegment]) -> list[TranscriptSegment]:
+def _merge_adjacent_segments(
+    segments: list[TranscriptSegment],
+) -> list[TranscriptSegment]:
+    """Merge consecutive segments from the same speaker."""
     if not segments:
         return []
     merged = [segments[0]]
@@ -119,5 +137,5 @@ def _merge_adjacent_segments(segments: list[TranscriptSegment]) -> list[Transcri
             current.source_lineage.extend(segment.source_lineage)
         else:
             merged.append(segment)
-    LOGGER.debug("Parsed %d merged segments", len(merged))
+    LOGGER.debug(f"Parsed {len(merged)} merged segments")
     return merged
