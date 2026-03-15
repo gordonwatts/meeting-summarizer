@@ -23,8 +23,7 @@ def render_summary_markdown(summary: MeetingSummary) -> str:
         Markdown content for the meeting summary.
     """
     lines = ["# Meeting Summary", "", summary.paragraph, "", "## Themes", ""]
-    theme_rows = [[theme.title, "; ".join(theme.details)] for theme in summary.themes]
-    lines.extend(render_markdown_table(["Theme", "Details"], theme_rows))
+    lines.extend(f"- {theme.title}" for theme in summary.themes or [SummaryTheme("None noted.")])
     lines.extend(["", "## Action Items", ""])
     action_rows = [
         [item.mentioner, item.description, item.quote or ""]
@@ -41,8 +40,9 @@ def render_summary_markdown(summary: MeetingSummary) -> str:
     for talk in summary.talk_points:
         lines.extend([f"### {talk.speaker}", "", "Salient points:"])
         lines.extend(f"- {item}" for item in talk.salient_points or ["None noted."])
-        lines.extend(["", "Questions:"])
-        lines.extend(f"- {item}" for item in talk.questions or ["None noted."])
+        if talk.questions:
+            lines.extend(["", "Questions:"])
+            lines.extend(f"- {item}" for item in talk.questions)
         if talk.quotes:
             lines.extend(["", "Quotes:"])
             lines.extend(f'- "{quote}"' for quote in talk.quotes)
@@ -157,6 +157,10 @@ def parse_summary_markdown(content: str) -> MeetingSummary:
                 for row in rows
                 if row.get("Theme", "") != "None noted."
             ]
+            continue
+        if section == "themes" and line.startswith("- "):
+            themes.append(SummaryTheme(title=line[2:].strip()))
+            index += 1
             continue
         if section == "action_items" and stripped.startswith("|"):
             rows, index = parse_markdown_table(lines, index)

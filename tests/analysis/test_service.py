@@ -62,6 +62,7 @@ def test_cross_reference_writes_output(workspace_tmp_path, monkeypatch) -> None:
                 focus_area=FocusArea(
                     id="tracking", title="Tracking", description="desc"
                 ),
+                mentioned_people=["Alice"],
                 relevant_points=["point"],
                 outstanding_questions=[],
                 action_items=[],
@@ -103,7 +104,7 @@ def test_run_full_analysis_returns_without_work_when_outputs_exist(
     )
     summary_path = workspace_tmp_path / "meeting.summary.md"
     summary_path.write_text(
-        "# Meeting Summary\n\nSummary paragraph.\n\n## Themes\n\n| Theme | Details |\n| --- | --- |\n| None noted. |  |\n\n## Action Items\n\n| Owner | Action | Quote |\n| --- | --- | --- |\n| None noted. |  |  |\n\n## External Resources\n\n| Resource | Type | Context |\n| --- | --- | --- |\n| None noted. |  |  |\n\n## Talk Highlights\n",
+        "# Meeting Summary\n\nSummary paragraph.\n\n## Themes\n\n- None noted.\n\n## Action Items\n\n| Owner | Action | Quote |\n| --- | --- | --- |\n| None noted. |  |  |\n\n## External Resources\n\n| Resource | Type | Context |\n| --- | --- | --- |\n| None noted. |  |  |\n\n## Talk Highlights\n",
         encoding="utf-8",
     )
     (workspace_tmp_path / "meeting.focus-areas.md").write_text(
