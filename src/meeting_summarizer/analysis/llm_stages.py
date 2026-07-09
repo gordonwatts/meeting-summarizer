@@ -472,21 +472,36 @@ def cross_reference_with_llm(
             ensure_ascii=True,
         ),
     )
-    relevant_points = _limit_focus_items([
-        item
-        for item in (_coerce_focus_relevant_point(value) for value in payload.get("relevant_points", []))
-        if item
-    ])
-    outstanding_questions = _limit_focus_items([
-        item
-        for item in (_coerce_focus_question(value) for value in payload.get("outstanding_questions", []))
-        if item
-    ])
-    action_items = _limit_focus_items([
-        item
-        for item in (_coerce_focus_action_item(value) for value in payload.get("action_items", []))
-        if item
-    ])
+    relevant_points = _limit_focus_items(
+        [
+            item
+            for item in (
+                _coerce_focus_relevant_point(value)
+                for value in payload.get("relevant_points", [])
+            )
+            if item
+        ]
+    )
+    outstanding_questions = _limit_focus_items(
+        [
+            item
+            for item in (
+                _coerce_focus_question(value)
+                for value in payload.get("outstanding_questions", [])
+            )
+            if item
+        ]
+    )
+    action_items = _limit_focus_items(
+        [
+            item
+            for item in (
+                _coerce_focus_action_item(value)
+                for value in payload.get("action_items", [])
+            )
+            if item
+        ]
+    )
     mentioned_people = _coerce_text_list(payload.get("mentioned_people", []))
     if not mentioned_people:
         mentioned_people = _derive_mentioned_people(

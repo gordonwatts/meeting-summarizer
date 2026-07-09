@@ -43,9 +43,7 @@ def parse_transcript(path: str | Path) -> list[TranscriptSegment]:
 def _parse_vtt(raw_text: str) -> list[TranscriptSegment]:
     """Parse a WebVTT transcript into raw segments."""
     blocks = [
-        block.strip()
-        for block in re.split(r"\r?\n\s*\r?\n", raw_text)
-        if block.strip()
+        block.strip() for block in re.split(r"\r?\n\s*\r?\n", raw_text) if block.strip()
     ]
     segments: list[TranscriptSegment] = []
     for block in blocks:

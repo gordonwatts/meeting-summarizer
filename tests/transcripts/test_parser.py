@@ -30,9 +30,7 @@ def test_parse_vtt_accepts_windows_line_endings(workspace_tmp_path) -> None:
 def test_parse_vtt_accepts_webvtt_voice_cues(workspace_tmp_path) -> None:
     path = workspace_tmp_path / "meeting.vtt"
     path.write_text(
-        "WEBVTT\n\n"
-        "00:00:01.000 --> 00:00:02.000\n"
-        "<v Alice> Welcome everyone.\n",
+        "WEBVTT\n\n" "00:00:01.000 --> 00:00:02.000\n" "<v Alice> Welcome everyone.\n",
         encoding="utf-8",
     )
 

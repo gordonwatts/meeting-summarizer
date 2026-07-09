@@ -34,7 +34,9 @@ def test_cleaning_logs_rendered_chunk_size(caplog) -> None:
             return {"segments": []}
 
     segments = [TranscriptSegment(speaker="Alice", text="Cleaned text.")]
-    with caplog.at_level(logging.DEBUG, logger="meeting_summarizer.analysis.llm_stages"):
+    with caplog.at_level(
+        logging.DEBUG, logger="meeting_summarizer.analysis.llm_stages"
+    ):
         clean_transcript_with_llm(CleaningStubClient(), "gpt-5-mini", segments)
 
     assert "Sending transcript cleaning chunk to OpenAI" in caplog.text
