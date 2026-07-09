@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import asdict
 from typing import TYPE_CHECKING, Any
@@ -19,6 +20,9 @@ from meeting_summarizer.models import (
 
 if TYPE_CHECKING:
     from meeting_summarizer.openai_client import OpenAIClient
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _normalize_model_text(text: str) -> str:
@@ -334,6 +338,13 @@ def clean_transcript_with_llm(
     Returns:
         The cleaned transcript.
     """
+    input_text = transcript_to_text(segments)
+    LOGGER.debug(
+        "Sending transcript cleaning chunk to OpenAI: model=%s segments=%d chars=%d",
+        model,
+        len(segments),
+        len(input_text),
+    )
     payload = client.generate_json(
         model=model,
         instructions=(
@@ -345,7 +356,7 @@ def clean_transcript_with_llm(
             "summarize, paraphrase away decisions, or invent content. Return JSON with a 'segments' "
             "array. Each segment must include speaker, text, start_time, end_time, and source_lineage."
         ),
-        input_text=transcript_to_text(segments),
+        input_text=input_text,
     )
     return CleanTranscript(
         segments=[
@@ -461,21 +472,36 @@ def cross_reference_with_llm(
             ensure_ascii=True,
         ),
     )
-    relevant_points = _limit_focus_items([
-        item
-        for item in (_coerce_focus_relevant_point(value) for value in payload.get("relevant_points", []))
-        if item
-    ])
-    outstanding_questions = _limit_focus_items([
-        item
-        for item in (_coerce_focus_question(value) for value in payload.get("outstanding_questions", []))
-        if item
-    ])
-    action_items = _limit_focus_items([
-        item
-        for item in (_coerce_focus_action_item(value) for value in payload.get("action_items", []))
-        if item
-    ])
+    relevant_points = _limit_focus_items(
+        [
+            item
+            for item in (
+                _coerce_focus_relevant_point(value)
+                for value in payload.get("relevant_points", [])
+            )
+            if item
+        ]
+    )
+    outstanding_questions = _limit_focus_items(
+        [
+            item
+            for item in (
+                _coerce_focus_question(value)
+                for value in payload.get("outstanding_questions", [])
+            )
+            if item
+        ]
+    )
+    action_items = _limit_focus_items(
+        [
+            item
+            for item in (
+                _coerce_focus_action_item(value)
+                for value in payload.get("action_items", [])
+            )
+            if item
+        ]
+    )
     mentioned_people = _coerce_text_list(payload.get("mentioned_people", []))
     if not mentioned_people:
         mentioned_people = _derive_mentioned_people(

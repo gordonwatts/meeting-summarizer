@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import logging
+
 from meeting_summarizer.analysis.llm_stages import (
+    clean_transcript_with_llm,
     cross_reference_with_llm,
     summarize_meeting_with_llm,
     transcript_to_text,
@@ -23,6 +26,22 @@ def test_transcript_to_text_includes_timestamps() -> None:
         ]
     )
     assert text == "Alice [00:00:01]: Cleaned text."
+
+
+def test_cleaning_logs_rendered_chunk_size(caplog) -> None:
+    class CleaningStubClient:
+        def generate_json(self, *, model: str, instructions: str, input_text: str):
+            return {"segments": []}
+
+    segments = [TranscriptSegment(speaker="Alice", text="Cleaned text.")]
+    with caplog.at_level(
+        logging.DEBUG, logger="meeting_summarizer.analysis.llm_stages"
+    ):
+        clean_transcript_with_llm(CleaningStubClient(), "gpt-5-mini", segments)
+
+    assert "Sending transcript cleaning chunk to OpenAI" in caplog.text
+    assert "segments=1" in caplog.text
+    assert "chars=20" in caplog.text
 
 
 def test_cross_reference_normalizes_structured_review_items() -> None:

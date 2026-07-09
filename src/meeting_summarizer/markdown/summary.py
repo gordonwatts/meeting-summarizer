@@ -23,7 +23,9 @@ def render_summary_markdown(summary: MeetingSummary) -> str:
         Markdown content for the meeting summary.
     """
     lines = ["# Meeting Summary", "", summary.paragraph, "", "## Themes", ""]
-    lines.extend(f"- {theme.title}" for theme in summary.themes or [SummaryTheme("None noted.")])
+    lines.extend(
+        f"- {theme.title}" for theme in summary.themes or [SummaryTheme("None noted.")]
+    )
     lines.extend(["", "## Action Items", ""])
     action_rows = [
         [item.mentioner, item.description, item.quote or ""]
