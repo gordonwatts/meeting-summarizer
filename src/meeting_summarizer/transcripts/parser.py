@@ -11,7 +11,9 @@ LOGGER = logging.getLogger(__name__)
 TIME_RANGE_RE = re.compile(
     r"^(?P<start>\d{2}:\d{2}:\d{2}\.\d{3}) --> (?P<end>\d{2}:\d{2}:\d{2}\.\d{3})$"
 )
-VTT_SPEAKER_RE = re.compile(r"^(?P<speaker>[^:]+):\s*(?P<text>.+)$")
+VTT_SPEAKER_RE = re.compile(
+    r"^(?:(?P<speaker>[^:]+):|<v\s+(?P<vtt_speaker>[^>]+)>)\s*(?P<text>.+)$"
+)
 TXT_LINE_RE = re.compile(
     r"^(?P<time>\d{1,2}:\d{2}:\d{2})(?:\s+)?(?P<speaker>[^:]+):\s*(?P<text>.+)$"
 )
@@ -40,7 +42,11 @@ def parse_transcript(path: str | Path) -> list[TranscriptSegment]:
 
 def _parse_vtt(raw_text: str) -> list[TranscriptSegment]:
     """Parse a WebVTT transcript into raw segments."""
-    blocks = [block.strip() for block in raw_text.split("\n\n") if block.strip()]
+    blocks = [
+        block.strip()
+        for block in re.split(r"\r?\n\s*\r?\n", raw_text)
+        if block.strip()
+    ]
     segments: list[TranscriptSegment] = []
     for block in blocks:
         lines = [line.strip() for line in block.splitlines() if line.strip()]
@@ -56,12 +62,20 @@ def _parse_vtt(raw_text: str) -> list[TranscriptSegment]:
         if not text_lines:
             continue
         speaker_match = VTT_SPEAKER_RE.match(" ".join(text_lines))
-        if not speaker_match:
-            continue
+        if speaker_match:
+            speaker = (
+                speaker_match.group("speaker")
+                or speaker_match.group("vtt_speaker")
+                or "Unknown"
+            )
+            text = speaker_match.group("text")
+        else:
+            speaker = "Unknown"
+            text = " ".join(text_lines)
         segments.append(
             TranscriptSegment(
-                speaker=speaker_match.group("speaker").strip(),
-                text=speaker_match.group("text").strip(),
+                speaker=speaker.strip(),
+                text=text.strip(),
                 start_time=match.group("start"),
                 end_time=match.group("end"),
                 source_lineage=text_lines,
@@ -131,7 +145,7 @@ def _merge_adjacent_segments(
     merged = [segments[0]]
     for segment in segments[1:]:
         current = merged[-1]
-        if current.speaker == segment.speaker:
+        if current.speaker == segment.speaker and current.speaker != "Unknown":
             current.text = f"{current.text} {segment.text}".strip()
             current.end_time = segment.end_time or current.end_time
             current.source_lineage.extend(segment.source_lineage)

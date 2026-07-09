@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import asdict
 from typing import TYPE_CHECKING, Any
@@ -19,6 +20,9 @@ from meeting_summarizer.models import (
 
 if TYPE_CHECKING:
     from meeting_summarizer.openai_client import OpenAIClient
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _normalize_model_text(text: str) -> str:
@@ -334,6 +338,13 @@ def clean_transcript_with_llm(
     Returns:
         The cleaned transcript.
     """
+    input_text = transcript_to_text(segments)
+    LOGGER.debug(
+        "Sending transcript cleaning chunk to OpenAI: model=%s segments=%d chars=%d",
+        model,
+        len(segments),
+        len(input_text),
+    )
     payload = client.generate_json(
         model=model,
         instructions=(
@@ -345,7 +356,7 @@ def clean_transcript_with_llm(
             "summarize, paraphrase away decisions, or invent content. Return JSON with a 'segments' "
             "array. Each segment must include speaker, text, start_time, end_time, and source_lineage."
         ),
-        input_text=transcript_to_text(segments),
+        input_text=input_text,
     )
     return CleanTranscript(
         segments=[
